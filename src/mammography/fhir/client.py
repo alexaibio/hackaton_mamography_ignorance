@@ -2,9 +2,10 @@ import json
 from pathlib import Path
 
 import httpx
+import pandas as pd
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
-from mammography.config import get_settings
+from mammography.config import get_config, get_settings
 
 PAGE_SIZE = 100
 TIMEOUT = 30.0
@@ -46,10 +47,40 @@ def _headers() -> dict[str, str]:
     return headers
 
 
+HISTORY_DATE_PARAM = {
+    "Communication": "sent",
+    "Appointment": "date",
+    "Encounter": "date",
+    "Procedure": "date",
+    "Observation": "date",
+}
+
+
+def search_params(resource_type: str) -> dict[str, str]:
+    fetch_config = get_config().get("fetch", {})
+    params = {}
+
+    patient_filter = fetch_config.get("patient", {})
+    if resource_type == "Patient":
+        if "gender" in patient_filter:
+            params["gender"] = patient_filter["gender"]
+        if "min_age" in patient_filter:
+            cutoff = pd.Timestamp.today() - pd.DateOffset(years=patient_filter["min_age"])
+            params["birthdate"] = f"le{cutoff.date().isoformat()}"
+
+    history_years = fetch_config.get("history_years")
+    date_param = HISTORY_DATE_PARAM.get(resource_type)
+    if history_years and date_param:
+        since = pd.Timestamp.today() - pd.DateOffset(years=history_years)
+        params[date_param] = f"ge{since.date().isoformat()}"
+
+    return params
+
+
 def fetch_resources(resource_type: str, out_path: Path, limit: int | None = None) -> int:
     settings = get_settings()
     url = f"{settings.fhir_base_url}/{resource_type}"
-    params: dict | None = {"_count": PAGE_SIZE}
+    params: dict | None = {"_count": PAGE_SIZE, **search_params(resource_type)}
     written = 0
 
     with httpx.Client(headers=_headers(), timeout=TIMEOUT) as client:

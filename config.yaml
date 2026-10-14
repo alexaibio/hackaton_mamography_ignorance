@@ -1,11 +1,22 @@
 seed: 42
 
+# coarse server-side filter for the download only, to avoid pulling children and men.
+# keep it well below the training cohort boundary — the cohort is defined separately
+fetch:
+  # how far back to pull dated resources. the earliest invitations in this window
+  # have a truncated history, so train on a shorter span than you download
+  history_years: 5
+
+  patient:
+    gender: female
+    min_age: 35
+
 # name of the modelling table written to data/processed/
 modelling_table: invitations
 
 target: attended
 
-features:
+training_features:
   categorical:
     - region
     - notification_type

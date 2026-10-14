@@ -1,4 +1,16 @@
 # Mammography ignorance analysis toolset
+This package provides a set of tools to analise FHIR Clinical data from 
+medical insurance company to predict which patient will ignore mammography invitations.
+
+The general flow:
+- get history of all eligible patients : wimen, age>40, only info for last 3 years (config.yaml)
+- flatten the data - create a flat csv file out of tree-like FHIR structures
+- do e simple exploratory analysis in notebook
+
+
+UX : `uv run streamlit run app/Home.py`
+It opens on http://localhost:8501.
+
 
 ## Installing package with UV
 
@@ -41,11 +53,10 @@ You can run Python with two options:
 environment:
 
 ```bash
-uv run list-risk-patients --top 50
+uv run mammo fetch
 uv run jupyter lab
-uv run pytest
 ```
-- through activation environment with `source .venv/bin/activate `
+- or through activation environment with `source .venv/bin/activate `
 
 
 ## Test data
