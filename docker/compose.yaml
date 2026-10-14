@@ -1,0 +1,21 @@
+# Local FHIR server, so fhir/client.py and fhir/flatten.py can be written against real
+# FHIR payloads before credentials for the production server arrive.
+#
+#   docker compose -f docker/compose.yaml up -d
+#   curl -s http://localhost:8080/fhir/metadata | jq '.rest[0].security'
+#
+# Then put FHIR_BASE_URL=http://localhost:8080/fhir in .env and leave FHIR_TOKEN empty.
+# Uses the embedded H2 database: data is lost on `down`, so keep seeding repeatable.
+
+services:
+  fhir:
+    image: hapiproject/hapi:latest
+    ports:
+      - "8080:8080"
+    environment:
+      HAPI_FHIR_FHIR_VERSION: R4
+      HAPI_FHIR_ALLOW_EXTERNAL_REFERENCES: "true"
+      HAPI_FHIR_BULK_EXPORT_ENABLED: "true"
+      # small page size locally, so client.py is forced to follow Bundle.link next
+      HAPI_FHIR_DEFAULT_PAGE_SIZE: "20"
+      HAPI_FHIR_MAX_PAGE_SIZE: "200"

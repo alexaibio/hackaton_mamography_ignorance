@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mammography"
+version = "0.1"
+description = "A set of tools to predict mammography invitation ignorance"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Alex Y" },
+    { name = "TBD" },
+]
+
+dependencies = [
+    # Web
+    "fastapi>=0.116.0",
+    "uvicorn==0.32.1",
+    "httpx>=0.28",
+    # Config / Validation
+    "python-dotenv==1.1.0",
+    "pydantic==2.10.3",
+    "pydantic-settings==2.6.1",
+    "pyyaml>=6.0",
+    # Utils
+    "tenacity==9.0.0",
+    "loguru==0.7.2",
+    # Data
+    "numpy==1.26.4",
+    "pandas==2.2.3",
+    "pyarrow>=18.0",
+    # Modelling
+    "catboost>=1.2.7",
+    "scikit-learn>=1.5",
+    "shap>=0.46",
+    # Viz / notebooks
+    "matplotlib>=3.9",
+    "seaborn>=0.13",
+    "jupyter>=1.1",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# scripts to be run as commands
+[project.scripts]
+mammo = "mammography.cli:main"

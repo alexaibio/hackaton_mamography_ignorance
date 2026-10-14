@@ -1,0 +1,33 @@
+seed: 42
+
+# name of the modelling table written to data/processed/
+modelling_table: invitations
+
+target: attended
+
+features:
+  categorical:
+    - region
+    - notification_type
+    - notification_channel
+  numeric:
+    - age
+    - n_invitations
+    - n_prior_invitations
+    - n_prior_attended
+
+split:
+  test_size: 0.2
+  stratify: true
+
+catboost:
+  iterations: 1000
+  learning_rate: 0.05
+  depth: 6
+  loss_function: Logloss
+  eval_metric: AUC
+  early_stopping_rounds: 50
+  verbose: 100
+
+segments:
+  n_clusters: 5
