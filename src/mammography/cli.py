@@ -1,5 +1,4 @@
 import argparse
-from pathlib import Path
 
 from mammography.config import get_config, get_settings
 from mammography.fhir.client import fetch_resources
