@@ -8,8 +8,7 @@ The general flow:
 - do e simple exploratory analysis in notebook
 
 
-UX : `uv run streamlit run app/Home.py`
-It opens on http://localhost:8501.
+
 
 
 ## Installing package with UV
@@ -135,3 +134,6 @@ mammo segment          →  data/processed/segments.csv + reports/segments.md
 
 ## The UX for end customer
 It is done with streamlit app.
+
+UX : `uv run streamlit run app/Home.py`
+It opens on http://localhost:8501.
