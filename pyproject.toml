@@ -40,6 +40,8 @@ dependencies = [
     "jupyter>=1.1",
     # UI
     "streamlit>=1.40",
+    # LLM
+    "openai>=1.79.0",
 ]
 
 [tool.setuptools.packages.find]

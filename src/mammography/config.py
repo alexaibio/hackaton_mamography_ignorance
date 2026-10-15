@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     models_folder: Path
     fhir_base_url: str = ""
     fhir_token: str = ""
+    openai_api_key: str = ""
 
     @field_validator("log_dir", "data_folder", "models_folder")
     @classmethod
