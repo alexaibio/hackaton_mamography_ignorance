@@ -1,7 +1,7 @@
 # Local FHIR server, so fhir/client.py and fhir/flatten.py can be written against real
 # FHIR payloads before credentials for the production server arrive.
 #
-#   docker compose -f docker/compose.yaml up -d
+#   docker compose -f docker/docker-compose-fhir.yaml up -d
 #   curl -s http://localhost:8080/fhir/metadata | jq '.rest[0].security'
 #
 # Then put FHIR_BASE_URL=http://localhost:8080/fhir in .env and leave FHIR_TOKEN empty.

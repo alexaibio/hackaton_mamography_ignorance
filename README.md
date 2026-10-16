@@ -61,7 +61,7 @@ uv run jupyter lab
 ## Test data
 ### FHIR local docker 
 First, provide access to FHIR API, 
-- either by running a test instance in docker `docker compose -f docker/compose.yaml up -d`
+- either by running a test instance in docker `docker compose -f docker/docker-compose-fhir.yaml up -d`
 - or by providing .env credentials `FHIR_BASE_UR`
 
 You can test it either by
