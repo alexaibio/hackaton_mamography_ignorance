@@ -8,7 +8,6 @@
     "months_last_invitation",
     "healthcare_contact_12m_cnt",
     "insurance_duration_years",
-    "prior_screen_count_5y",
     "gp_prevention_24m_cnt",
     "gyn_prevention_24m_cnt",
     "other_screening_36m_cnt",
@@ -24,12 +23,12 @@
     "gp_reg_duration_band",
     "gyn_reg_duration_band"
   ],
-  "test_size": 0.15,
+  "test_size": 0.2,
   "iterations": 1000,
-  "n_train": 971514,
-  "n_valid": 171066,
-  "n_test": 201976,
-  "persons_test": 76280,
-  "best_iteration": 999,
-  "trained_at": "2026-10-16T14:56:14+00:00"
+  "n_train": 859660,
+  "n_valid": 215722,
+  "n_test": 269174,
+  "persons_test": 101706,
+  "best_iteration": 996,
+  "trained_at": "2026-10-16T15:18:06+00:00"
 }
