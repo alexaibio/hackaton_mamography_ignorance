@@ -147,9 +147,22 @@ with table_column:
     )
 
 with pie_column:
-    ranked = territory.sort_values("share_of_non_responders_%", ascending=False)
-    top = ranked["share_of_non_responders_%"].head(TOP_AREAS)
-    shares = pd.concat(
-        [top, pd.Series({"All other areas": round(100 - top.sum(), 1)})]
+    national_rate = territory["non_responders"].sum() / territory["invitations"].sum()
+    excess = (
+        territory["non_responders"] - territory["invitations"] * national_rate
+    ).sort_values(ascending=False)
+    above_average = excess[excess > 0]
+
+    slices = above_average.head(TOP_AREAS).round(0)
+    remainder = above_average.iloc[TOP_AREAS:].sum().round(0)
+    if remainder > 0:
+        slices = pd.concat([slices, pd.Series({"All other areas above average": remainder})])
+
+    draw_pie(slices, "Excess non-responders, size-adjusted")
+    st.caption(
+        f"Non-responders above what this area's invitation volume would predict at the "
+        f"national rate of {national_rate:.1%}. "
+        f"{len(above_average)} of {len(territory)} areas are above average; the rest are "
+        "at or below it and do not appear. A large area with an average rate contributes "
+        "nothing here, however many non-responders it has."
     )
-    draw_pie(shares, f"Share of all non-responders — {TOP_AREAS} largest areas")

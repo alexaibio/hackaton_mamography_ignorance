@@ -8,7 +8,6 @@
     "months_last_invitation",
     "healthcare_contact_12m_cnt",
     "insurance_duration_years",
-    "months_since_last_screen",
     "gp_prevention_24m_cnt",
     "gyn_prevention_24m_cnt",
     "other_screening_36m_cnt",
@@ -30,6 +29,6 @@
   "n_valid": 120273,
   "n_test": 134847,
   "persons_test": 50853,
-  "best_iteration": 989,
-  "trained_at": "2026-10-16T18:50:33+00:00"
+  "best_iteration": 999,
+  "trained_at": "2026-10-16T19:06:07+00:00"
 }
