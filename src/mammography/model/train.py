@@ -1,9 +1,13 @@
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from catboost import CatBoostClassifier, Pool
 from sklearn.model_selection import GroupShuffleSplit
 
-from mammography.config import get_config
+from mammography.config import get_config, get_settings
 
 HORIZON_FLAGS = ("screening_3m_flag", "screening_6m_flag", "screening_12m_flag")
 MISSING = "missing"
@@ -106,6 +110,8 @@ def train_model(
         "target": target,
         "features": list(features.columns),
         "categorical": categorical,
+        "test_size": holdout,
+        "iterations": parameters["iterations"],
         "n_train": len(train_index),
         "n_valid": len(valid_index),
         "n_test": len(test_index),
@@ -115,6 +121,75 @@ def train_model(
         "screening_probability": model.predict_proba(test_pool)[:, 1],
         "test_pool": test_pool,
     }
+
+
+METADATA_FIELDS = (
+    "target",
+    "features",
+    "categorical",
+    "test_size",
+    "iterations",
+    "n_train",
+    "n_valid",
+    "n_test",
+    "persons_test",
+    "best_iteration",
+)
+
+
+def run_paths() -> dict[str, Path]:
+    folder = get_settings().models_folder
+    return {
+        "model": folder / "model.cbm",
+        "metadata": folder / "run.json",
+        "predictions": folder / "test_predictions.csv",
+    }
+
+
+def save_run(run: dict) -> Path:
+    paths = run_paths()
+    paths["model"].parent.mkdir(parents=True, exist_ok=True)
+
+    run["model"].save_model(str(paths["model"]))
+
+    metadata = {field: run[field] for field in METADATA_FIELDS}
+    metadata["trained_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    paths["metadata"].write_text(json.dumps(metadata, indent=2))
+
+    pd.DataFrame(
+        {"screened": run["y_test"], "screening_probability": run["screening_probability"]}
+    ).to_csv(paths["predictions"], index=False)
+
+    return paths["model"]
+
+
+def load_run() -> dict | None:
+    paths = run_paths()
+    if not all(path.exists() for path in paths.values()):
+        return None
+
+    model = CatBoostClassifier()
+    model.load_model(str(paths["model"]))
+    predictions = pd.read_csv(paths["predictions"])
+
+    return {
+        **json.loads(paths["metadata"].read_text()),
+        "model": model,
+        "y_test": predictions["screened"].to_numpy(),
+        "screening_probability": predictions["screening_probability"].to_numpy(),
+        "test_pool": None,
+    }
+
+
+def rebuild_test_pool(invitations: pd.DataFrame, run: dict) -> Pool:
+    config = get_config()
+    features, labels = prepare(invitations, run["target"], config, run["features"])
+    _, test_index = split_by_person(
+        features, labels, invitations["person_id"], run["test_size"], config["seed"]
+    )
+    return Pool(
+        features.iloc[test_index], labels.iloc[test_index], cat_features=run["categorical"]
+    )
 
 
 def feature_importance(model: CatBoostClassifier, pool: Pool, method: str) -> pd.DataFrame:
