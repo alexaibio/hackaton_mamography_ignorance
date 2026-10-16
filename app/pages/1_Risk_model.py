@@ -3,12 +3,7 @@ import streamlit as st
 
 from mammography.config import get_config
 from mammography.io import read_table
-from mammography.model.evaluate import (
-    confusion,
-    lift_table,
-    metrics_at_threshold,
-    threshold_free_metrics,
-)
+from mammography.model.evaluate import ignore_class_metrics
 from mammography.model.train import (
     HORIZON_FLAGS,
     feature_columns,
@@ -33,6 +28,7 @@ def load_invitations() -> pd.DataFrame:
 
 config = get_config()
 categorical, numeric, boolean = feature_columns(config)
+ALL_FEATURES = categorical + numeric + boolean
 invitations = load_invitations()
 
 st.title("Risk model")
@@ -50,21 +46,15 @@ existing = st.session_state.get("run")
 
 if existing is None:
     st.warning(f"No saved model in {run_paths()['model'].parent}.")
+    trained_on = {column for column in ALL_FEATURES if column not in DEFAULT_OFF}
 else:
-    st.info(
-        f"**Saved model** — label `{existing['target']}`, "
-        f"{len(existing['features'])} features, "
-        f"{existing['iterations']} iterations (best: {existing['best_iteration']}), "
-        f"tested on {existing['n_test']:,} invitations. "
-        f"Trained at {existing.get('trained_at', 'this session')}.",
-        icon=":material/save:",
-    )
+    trained_on = set(existing["features"])
 
 with st.form("training"):
     st.header("Features")
     st.caption(
-        "Untick a feature to train without it. Edit `training_features` in config.yaml "
-        "to change the available set."
+        "Ticked boxes start from the features the saved model was actually trained on. "
+        "Edit `training_features` in config.yaml to change the available set."
     )
 
     selected = []
@@ -77,7 +67,7 @@ with st.form("training"):
         checkboxes = st.columns(4)
         for position, column in enumerate(group):
             if checkboxes[position % 4].checkbox(
-                column, value=column not in DEFAULT_OFF, key=f"feature_{column}"
+                column, value=column in trained_on, key=f"feature_{column}"
             ):
                 selected.append(column)
 
@@ -120,6 +110,7 @@ if train_requested:
         )
         save_run(run)
         st.session_state["run"] = run
+        trained_on = set(run["features"])
     st.toast(f"Saved to {run_paths()['model']}")
 
 run = st.session_state.get("run")
@@ -132,39 +123,56 @@ screened = run["y_test"]
 probability = run["screening_probability"]
 
 st.success(
+    f"**Model in use** — label `{run['target']}`, {len(run['features'])} features, "
+    f"{run['iterations']} iterations (best: {run['best_iteration']}). "
     f"Trained on {run['n_train']:,} invitations, validated on {run['n_valid']:,}, "
     f"tested on {run['n_test']:,} ({run['persons_test']:,} patients). "
-    f"Best iteration: {run['best_iteration']}. Label: `{run['target']}`. "
-    f"Features: {len(run['features'])}."
+    f"Trained at {run.get('trained_at', 'this session')}."
 )
+
+with st.expander(f"The {len(run['features'])} features this model was trained on"):
+    st.table(
+        pd.DataFrame(
+            [
+                (
+                    column,
+                    "categorical"
+                    if column in run["categorical"]
+                    else ("boolean" if column in boolean else "numeric"),
+                )
+                for column in run["features"]
+            ],
+            columns=["feature", "type"],
+        ).set_index("feature")
+    )
+
+unticked = trained_on - set(selected)
+newly_ticked = set(selected) - trained_on
+if unticked or newly_ticked:
+    st.warning(
+        "The tickboxes no longer match this model. Everything below still describes the "
+        "model as trained — press **Re-train the model** to apply the change.\n\n"
+        + (f"- removed since training: `{'`, `'.join(sorted(unticked))}`\n" if unticked else "")
+        + (f"- added since training: `{'`, `'.join(sorted(newly_ticked))}`" if newly_ticked else "")
+    )
 
 st.header("Performance on the held-out test set")
 
-st.subheader("Threshold-free")
-st.table(pd.Series(threshold_free_metrics(screened, probability)).round(4).to_frame("value"))
-
 with st.form("threshold"):
     threshold = st.slider(
-        "Decision threshold on the probability of screening", 0.05, 0.95, 0.5, 0.05
+        "Decision threshold on the probability of screening", 0.01, 0.99, 0.5, 0.01
     )
     st.form_submit_button("Apply")
 
-threshold_left, threshold_right = st.columns(2)
-with threshold_left:
-    st.subheader("At the chosen threshold")
-    st.table(
-        pd.Series(metrics_at_threshold(screened, probability, threshold)).round(4).to_frame("value")
-    )
-with threshold_right:
-    st.subheader("Confusion matrix")
-    st.table(confusion(screened, probability, threshold))
-
-st.subheader("Targeting value")
+st.subheader("The class we act on — flagged as likely to ignore")
 st.caption(
-    "If outreach is limited to the highest-risk share of the cohort, how many "
-    "non-responders does that reach compared with contacting at random."
+    "An invitation is flagged when the predicted probability of screening falls below "
+    "the threshold."
 )
-st.table(lift_table(screened, probability))
+
+st.table(
+    pd.Series(ignore_class_metrics(screened, probability, threshold)).round(4).to_frame("value")
+)
 
 st.header("Most important features")
 
@@ -181,3 +189,13 @@ importance = feature_importance(run["model"], pool, method)
 importance_left, importance_right = st.columns([2, 3])
 importance_left.table(importance.round(3))
 importance_right.bar_chart(importance)
+
+st.subheader("The extremes")
+
+strongest, weakest = st.columns(2)
+with strongest:
+    st.markdown("#### 5 most important — what the model leans on")
+    st.table(importance.head(5).round(3))
+with weakest:
+    st.markdown("#### 5 least important — candidates to untick and retrain without")
+    st.table(importance.tail(5).round(3))

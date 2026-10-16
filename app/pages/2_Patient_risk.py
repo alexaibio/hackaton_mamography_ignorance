@@ -2,17 +2,12 @@ import pandas as pd
 import streamlit as st
 from catboost import Pool
 
-from mammography.config import get_config
+from mammography.config import get_config, get_settings
 from mammography.io import read_table
-from mammography.llm.messages import draft_invitation_message
 from mammography.model.train import MISSING, feature_columns
 
-CURRENT_INVITATION_TEXT = """Vážená paní,
-
-zveme Vás na preventivní mamografické vyšetření. Vyšetření je hrazeno zdravotní
-pojišťovnou. Prosíme, ozvěte se na telefonní číslo [TELEFON] a sjednejte si termín.
-
-[SCREENINGOVÉ CENTRUM]"""
+INTERVENTIONS_FILE = "proposed_correction.csv"
+TOP_DRIVERS = 5
 
 st.set_page_config(page_title="Patient risk", layout="wide")
 
@@ -20,6 +15,16 @@ st.set_page_config(page_title="Patient risk", layout="wide")
 @st.cache_data
 def load_invitations() -> pd.DataFrame:
     return read_table("interim", "invitations", parse_dates=["invitation_date"])
+
+
+@st.cache_data
+def proposed_interventions() -> dict[str, str]:
+    path = get_settings().data_folder / INTERVENTIONS_FILE
+    if not path.exists():
+        return {}
+    table = pd.read_csv(path)
+    feature_column, text_column = table.columns[:2]
+    return dict(zip(table[feature_column].astype(str), table[text_column].astype(str)))
 
 
 @st.cache_data
@@ -110,14 +115,18 @@ shap_values = run["model"].get_feature_importance(type="ShapValues", data=pool)
 contributions = pd.Series(shap_values[0, :-1], index=run["features"])
 ranked = contributions.reindex(contributions.abs().sort_values(ascending=False).index)
 
+top = ranked.head(TOP_DRIVERS)
+texts = proposed_interventions()
+
 drivers = pd.DataFrame(
     {
-        "value": [patient[name] for name in ranked.index[:3]],
-        "effect on responding": ranked.head(3).round(4),
+        "value": [patient[name] for name in top.index],
+        "effect on responding": top.round(4),
         "direction": [
             "raises the chance she responds" if value > 0 else "raises the risk of ignoring"
-            for value in ranked.head(3)
+            for value in top
         ],
+        "proposed intervention": [texts.get(name, "") for name in top.index],
     }
 )
 st.table(drivers)
@@ -126,32 +135,14 @@ st.caption(
     "probability of responding. Positive pushes towards responding."
 )
 
-st.header("Invitation text")
-
-channel = st.selectbox("Channel", ["letter", "sms", "email"])
-
-text_left, text_right = st.columns(2)
-
-with text_left:
-    st.subheader("Current text")
-    st.text_area("current", CURRENT_INVITATION_TEXT, height=260, label_visibility="collapsed")
-
-with text_right:
-    st.subheader("Improved text")
-    if st.button("Ask LM to improve text"):
-        invitation = {
-            "age_band": patient.get("age_band"),
-            "region": patient.get("vzp_territorial_area"),
-            "notification_channel": channel,
-            "has_registered_gp": bool(patient.get("gp_registered", 0)),
-            "top_driver": str(ranked.index[0]),
-        }
-        with st.spinner("Drafting..."):
-            st.session_state["improved_text"] = draft_invitation_message(invitation, channel)
-
-    st.text_area(
-        "improved",
-        st.session_state.get("improved_text", ""),
-        height=260,
-        label_visibility="collapsed",
+if not texts:
+    st.warning(
+        f"No intervention texts loaded. Expected `{INTERVENTIONS_FILE}` in "
+        f"`{get_settings().data_folder}`, with the feature name in the first column "
+        "and the text to show in the second."
     )
+else:
+    unmapped = [name for name in top.index if name not in texts]
+    if unmapped:
+        st.caption(f"No intervention text for: `{'`, `'.join(unmapped)}`")
+

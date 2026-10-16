@@ -51,7 +51,7 @@ training_features:
     - never_screened_before_flag
 
 split:
-  test_size: 0.2
+  test_size: 0.1
   stratify: true
 
 catboost:

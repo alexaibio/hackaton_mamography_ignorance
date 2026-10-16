@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 from sklearn.metrics import (
-    accuracy_score,
     average_precision_score,
     brier_score_loss,
     confusion_matrix,
@@ -24,13 +23,48 @@ def metrics_at_threshold(
     screened: np.ndarray, screening_probability: np.ndarray, threshold: float
 ) -> dict:
     predicted = (screening_probability >= threshold).astype(int)
-    majority = max(screened.mean(), 1 - screened.mean())
     return {
-        "Accuracy": accuracy_score(screened, predicted),
-        "Accuracy of always predicting the majority": majority,
         "Precision": precision_score(screened, predicted, zero_division=0),
         "Recall": recall_score(screened, predicted, zero_division=0),
         "F1": f1_score(screened, predicted, zero_division=0),
+        "Flagged as responders": predicted.mean(),
+    }
+
+
+def ignore_class_metrics(
+    screened: np.ndarray, screening_probability: np.ndarray, threshold: float
+) -> dict:
+    """Metrics for the class that is acted on: flagged as likely to ignore."""
+    ignored = (1 - screened).astype(int)
+    flagged = (screening_probability < threshold).astype(int)
+    return {
+        "Precision — of those flagged, really ignore": precision_score(
+            ignored, flagged, zero_division=0
+        ),
+        "Recall — of all who ignore, flagged": recall_score(ignored, flagged, zero_division=0),
+    }
+
+
+def capacity_outcome(
+    screened: np.ndarray, screening_probability: np.ndarray, capacity_share: float
+) -> dict:
+    """What contacting the highest-risk capacity_share of the cohort would reach."""
+    ignored = 1 - screened
+    risk = 1 - screening_probability
+    size = max(int(len(risk) * capacity_share), 1)
+
+    highest_risk = np.argsort(-risk)[:size]
+    reached = int(ignored[highest_risk].sum())
+    at_random = int(round(size * ignored.mean()))
+
+    return {
+        "contacted": size,
+        "reached": reached,
+        "at_random": at_random,
+        "extra": reached - at_random,
+        "precision": reached / size,
+        "share_of_all_non_responders": reached / ignored.sum(),
+        "risk_cutoff": float(risk[highest_risk][-1]),
     }
 
 
