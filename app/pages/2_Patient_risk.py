@@ -56,7 +56,7 @@ defaults = numeric_defaults()
 
 st.header("New patient")
 
-with st.form("patient"):
+with st.form("patient_form"):
     entered: dict = {}
     widgets = st.columns(3)
 
@@ -74,9 +74,9 @@ with st.form("patient"):
     scored = st.form_submit_button("Calculate the probability", type="primary")
 
 if scored:
-    st.session_state["patient"] = entered
+    st.session_state["patient_input"] = entered
 
-patient = st.session_state.get("patient")
+patient = st.session_state.get("patient_input")
 if patient is None:
     st.stop()
 
