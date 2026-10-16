@@ -31,7 +31,11 @@ class Settings(BaseSettings):
 
     @property
     def raw_dir(self) -> Path:
-        return self.data_folder / "raw"
+        return self.data_folder / "raw_fhir"
+
+    @property
+    def raw_csv_dir(self) -> Path:
+        return self.data_folder / "raw_csv"
 
     @property
     def interim_dir(self) -> Path:

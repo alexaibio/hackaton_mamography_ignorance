@@ -14,18 +14,41 @@ fetch:
 # name of the modelling table written to data/processed/
 modelling_table: invitations
 
-target: attended
+# attendance within 3, 6 or 12 months is given as three separate columns.
+# picking one fixes the attendance window; true = screened, so ignorance is the negative class
+target: screening_12m_flag
+
+# the other two screening flags are the same outcome at a different horizon —
+# never use them as features
+leakage_exclude:
+  - screening_3m_flag
+  - screening_6m_flag
+  - invitation_id
+  - person_id
 
 training_features:
   categorical:
-    - region
-    - notification_type
-    - notification_channel
+    - age_band
+    - vzp_territorial_area
+    - gp_reg_duration_band
+    - gyn_reg_duration_band
   numeric:
-    - age
-    - n_invitations
-    - n_prior_invitations
-    - n_prior_attended
+    - prior_invitation_count
+    - months_last_invitation
+    - invitation_sequence
+    - healthcare_contact_12m_cnt
+    - insurance_duration_years
+    - prior_screen_count_5y
+    - months_since_last_screen
+    - gp_prevention_24m_cnt
+    - gyn_prevention_24m_cnt
+    - other_screening_36m_cnt
+    - dental_prevention_24m_cnt
+  boolean:
+    - first_invitation
+    - gp_registered
+    - gyn_registered_flag
+    - never_screened_before_flag
 
 split:
   test_size: 0.2

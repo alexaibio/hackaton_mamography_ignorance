@@ -1,8 +1,11 @@
 import argparse
+from pathlib import Path
 
 from mammography.config import get_config, get_settings
+from mammography.csv_import import default_source, load_invitations_csv
 from mammography.fhir.client import fetch_resources
 from mammography.fhir.flatten import flatten_resources
+from mammography.io import table_path
 from mammography.logger import setup_logger
 
 RESOURCES = ("Patient", "Communication", "Appointment")
@@ -31,9 +34,24 @@ def cmd_flatten(args: argparse.Namespace) -> None:
     flatten_resources()
 
 
+def cmd_load_csv(args: argparse.Namespace) -> None:
+    log = setup_logger("load_csv")
+    path = args.path or default_source()
+    log.info("loading {}", path)
+    rows = load_invitations_csv(path, encoding=args.encoding)
+    log.info("wrote {} invitations to {}", rows, table_path("interim", "invitations"))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="mammo")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p_load_csv = sub.add_parser("load_csv", help="invitations csv -> data/interim")
+    p_load_csv.add_argument(
+        "--path", type=Path, default=None, help="source csv; default: the one csv in data/raw_csv"
+    )
+    p_load_csv.add_argument("--encoding", default="utf-8", help="try cp1250 if utf-8 fails")
+    p_load_csv.set_defaults(func=cmd_load_csv)
 
     p_fetch = sub.add_parser("fetch", help="download FHIR resources to data/raw")
     p_fetch.add_argument("--limit", type=int, default=None, help="stop after N resources")

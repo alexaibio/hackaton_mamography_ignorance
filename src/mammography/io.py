@@ -4,7 +4,7 @@ import pandas as pd
 
 from mammography.config import get_settings
 
-STAGES = ("raw", "interim", "processed")
+STAGES = ("raw_fhir", "raw_csv", "interim", "processed")
 
 
 def table_path(stage: str, name: str) -> Path:
