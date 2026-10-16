@@ -147,7 +147,9 @@ with table_column:
     )
 
 with pie_column:
-    ranked = territory.sort_values("non_responders", ascending=False)
-    slices = ranked["non_responders"].head(TOP_AREAS)
-    slices["All other areas"] = ranked["non_responders"].iloc[TOP_AREAS:].sum()
-    draw_pie(slices, f"Where the non-responders are — {TOP_AREAS} largest areas")
+    ranked = territory.sort_values("share_of_non_responders_%", ascending=False)
+    top = ranked["share_of_non_responders_%"].head(TOP_AREAS)
+    shares = pd.concat(
+        [top, pd.Series({"All other areas": round(100 - top.sum(), 1)})]
+    )
+    draw_pie(shares, f"Share of all non-responders — {TOP_AREAS} largest areas")
