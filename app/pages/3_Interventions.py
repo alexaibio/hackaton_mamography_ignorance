@@ -208,12 +208,12 @@ person = summary.loc[person_id]
 history = invitations[invitations["person_id"] == person_id].sort_values("invitation_date")
 latest = history.iloc[-1]
 
-first, second, third, fourth = st.columns(4)
+first, second, third, fourth = st.columns([1, 1, 2.4, 1.4])
 first.metric("Invitations", int(person["invitations"]))
 second.metric("Age band", person["age_band"])
 third.metric(
     "Invited between",
-    f"{person['first_invitation']:%b %Y} – {person['last_invitation']:%b %Y}",
+    f"{person['first_invitation']:%m/%Y} – {person['last_invitation']:%m/%Y}",
 )
 screened_before = int(latest["prior_screen_count_5y"])
 with fourth:
@@ -222,44 +222,41 @@ with fourth:
     if screened_before == 0:
         st.caption(":red[never screened — the clearest signal she is not attending]")
 
-def yes_no(value) -> str:
-    return "yes" if bool(value) else "no"
+registered_with_gp = (
+    f"registered with a general practitioner (**{latest['gp_reg_duration_band'] or 'n/a'}** years)"
+    if latest["gp_registered"]
+    else "**not registered** with any general practitioner"
+)
+registered_with_gyn = (
+    f"registered with a gynaecologist (**{latest['gyn_reg_duration_band'] or 'n/a'}** years)"
+    if latest["gyn_registered_flag"]
+    else "**not registered** with any gynaecologist"
+)
+screening_history = (
+    "has **never** had a mammography screening"
+    if latest["never_screened_before_flag"]
+    else f"was screened **{int(latest['prior_screen_count_5y'])}** times in the last five years"
+)
 
+description = (
+    f"She lives in the **{latest['vzp_territorial_area']}** area and has been insured with "
+    f"VZP for **{int(latest['insurance_duration_years'])}** years. She is "
+    f"{registered_with_gp} and {registered_with_gyn}, and {screening_history}. In the twelve "
+    f"months before her last invitation she had **{int(latest['healthcare_contact_12m_cnt'])}** "
+    f"contacts with a doctor. Over twenty-four months she had "
+    f"**{int(latest['gp_prevention_24m_cnt'])}** preventive check-ups at the general "
+    f"practitioner, **{int(latest['gyn_prevention_24m_cnt'])}** at the gynaecologist and "
+    f"**{int(latest['dental_prevention_24m_cnt'])}** at the dentist, and over thirty-six "
+    f"months she took part in **{int(latest['other_screening_36m_cnt'])}** other screening "
+    "programmes."
+)
 
-context_lines = [
-    f"- VZP area: **{latest['vzp_territorial_area']}**",
-    f"- Insured with VZP for **{int(latest['insurance_duration_years'])} years**",
-    f"- Registered with a GP: **{yes_no(latest['gp_registered'])}**"
-    f" (registration band {latest['gp_reg_duration_band'] or 'n/a'})",
-    f"- Registered with a gynaecologist: **{yes_no(latest['gyn_registered_flag'])}**"
-    f" (registration band {latest['gyn_reg_duration_band'] or 'n/a'})",
-    f"- Never screened before: **{yes_no(latest['never_screened_before_flag'])}**",
-    f"- Contacts with any doctor in 12 months: **{int(latest['healthcare_contact_12m_cnt'])}**",
-    f"- Preventive check-ups at the GP in 24 months: "
-    f"**{int(latest['gp_prevention_24m_cnt'])}**",
-    f"- Preventive check-ups at the gynaecologist in 24 months: "
-    f"**{int(latest['gyn_prevention_24m_cnt'])}**",
-    f"- Other screening programmes in 36 months: "
-    f"**{int(latest['other_screening_36m_cnt'])}**",
-    f"- Dental preventive check-ups in 24 months: "
-    f"**{int(latest['dental_prevention_24m_cnt'])}**",
-]
+st.caption("At her last invitation")
+st.write(description)
 
-context_column, invitations_column = st.columns([2, 3])
-context_column.caption("At her last invitation")
-context_column.markdown("\n".join(context_lines))
-invitations_column.caption("Every invitation she received")
-invitations_column.dataframe(
-    history[
-        [
-            "invitation_date",
-            "age_band",
-            "invitation_sequence",
-            "screening_3m_flag",
-            "screening_6m_flag",
-            "screening_12m_flag",
-        ]
-    ],
+st.caption("Every invitation she received")
+st.dataframe(
+    history[["invitation_date", "age_band", "invitation_sequence"]],
     width="stretch",
     hide_index=True,
 )
@@ -291,10 +288,10 @@ if not steps:
     )
     st.metric("Risk of refusal, unchanged", f"{baseline_risk:.1%}")
 else:
-    st.markdown("#### What we propose for her")
+    st.markdown("#### :red[What we propose for her (with all proposals)]")
     st.markdown(
         "\n".join(
-            f"{position}. {ACTION_PHRASES.get(step['feature'], step['feature'])}"
+            f"{position}. :red[{ACTION_PHRASES.get(step['feature'], step['feature'])}]"
             for position, step in enumerate(steps, start=1)
         )
     )

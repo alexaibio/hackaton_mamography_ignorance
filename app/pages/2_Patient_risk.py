@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 from catboost import Pool
@@ -15,6 +16,7 @@ HORIZON_LABELS = {
     "screening_6m_flag": "within 6 months",
     "screening_12m_flag": "within 12 months",
 }
+HORIZON_ORDER = ("screening_12m_flag", "screening_6m_flag", "screening_3m_flag")
 UNLIKELY_AT_ANY_HORIZON = 0.20
 LATE_RESPONDER_GAP = 0.10
 
@@ -160,17 +162,22 @@ else:
         advice = "if she attends at all she attends early; no extra contact needed"
 
     speed_columns = st.columns(3)
-    for column, (horizon, probability) in zip(speed_columns, speeds.items()):
-        column.metric(HORIZON_LABELS[horizon], f"{probability:.1%}")
+    for column, horizon in zip(speed_columns, HORIZON_ORDER):
+        column.metric(HORIZON_LABELS[horizon], f"{speeds[horizon]:.1%}")
 
     st.markdown(f"#### {verdict}")
     st.caption(f"Probability of responding by each horizon. {advice}.")
-    st.bar_chart(
-        pd.Series(
-            {HORIZON_LABELS[horizon]: value for horizon, value in speeds.items()},
-            name="probability of responding",
-        )
-    )
+
+    # matplotlib, not st.bar_chart: that sorts the labels and puts 12 before 3
+    figure, axes = plt.subplots(figsize=(6, 3))
+    heights = [speeds[horizon] for horizon in HORIZON_ORDER]
+    axes.bar([HORIZON_LABELS[horizon] for horizon in HORIZON_ORDER], heights, color="crimson")
+    for position, height in enumerate(heights):
+        axes.text(position, height + 0.02, f"{height:.1%}", ha="center")
+    axes.set_ylabel("probability of responding")
+    axes.set_ylim(0, min(1.0, max(heights) * 1.3 + 0.05))
+    plt.tight_layout()
+    st.pyplot(figure)
 
     if not three <= six <= twelve:
         st.caption(
