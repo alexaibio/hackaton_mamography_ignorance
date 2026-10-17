@@ -1,0 +1,23 @@
+FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim
+
+WORKDIR /app
+
+# dependencies first, in their own layer, so editing code does not reinstall them
+COPY pyproject.toml README.md ./
+RUN uv sync --no-install-project
+
+COPY config.yaml ./
+COPY src/ src/
+COPY app/ app/
+RUN uv sync
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1
+
+EXPOSE 8501
+
+CMD ["streamlit", "run", "app/Home.py", \
+     "--server.address=0.0.0.0", \
+     "--server.port=8501", \
+     "--server.headless=true", \
+     "--browser.gatherUsageStats=false"]

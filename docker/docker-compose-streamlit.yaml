@@ -1,0 +1,38 @@
+# Live demo of the streamlit app, with no local python toolchain needed.
+#
+#   docker compose -f docker/docker-compose-streamlit.yaml up --build
+#
+# then open http://localhost:8501
+#
+# data/ is mounted read-only, so the demo cannot alter the source tables.
+# models/ is writable, so training from the Risk model page persists on the host.
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.streamlit
+    ports:
+      - "8501:8501"
+    # only OPENAI_API_KEY is taken from here; the paths below are set explicitly
+    env_file:
+      - ../.env
+    environment:
+      LOG_LEVEL: INFO
+      LOG_DIR: logs
+      DATA_FOLDER: data
+      MODELS_FOLDER: models
+    volumes:
+      - ../data:/app/data:ro
+      - ../models:/app/models
+      - ../logs:/app/logs
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
