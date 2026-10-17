@@ -14,9 +14,39 @@ The tools are presented as a simple web interface (streamlit) with the following
 - `Refusal/responder comparison` page - one radar chart putting the two groups directly against each other. Every patient is in exactly one of them: never screened after any invitation, or screened after at least one
 
 
+## AI components
+
+- **Risk model** — a gradient boosted decision tree (CatBoost) predicting whether a
+  screening is billed within the chosen horizon after an invitation. Risk of ignoring is
+  one minus that probability
+- **Three parallel models, one per horizon** (`3m`, `6m`, `12m`). The differences between
+  them segment a patient by *response speed*: a prompt responder, a late responder who
+  attends but needs a timed reminder, or someone unlikely at any horizon for whom a
+  reminder will not work and the route has to be her doctor. Two women with the same
+  12-month risk can need different interventions
+- **Feature importance** (`PredictionValuesChange` and `LossFunctionChange`) to see what
+  the model leans on across the cohort, and which features carry nothing and can be
+  dropped
+- **SHAP values for per-patient explanation** — the top drivers for one specific woman,
+  with the direction of each contribution. This is what makes an individual intervention
+  possible rather than a generic campaign
+- **Counterfactual search over actionable features** — a greedy optimiser scores modified
+  copies of a patient's record and returns the sequence of changes that lowers predicted
+  risk most, with the risk after each step. The search is restricted to features an
+  intervention can realistically move; age, region, insurance tenure and screening
+  history are held fixed
+- **Model-driven triage** — the whole refusal cohort is scored and ranked, so the output
+  is an ordered worklist. The decision threshold converts risk into a contact list of
+  whatever size outreach can handle
+- **LLM (OpenAI API)** — three personalised reminders for the patient, escalating in
+  concreteness rather than in pressure, plus one email each to her gynaecologist and
+  general practitioner. The whole patient record is given to the model so the text can be
+  specific
+
+
 ## Technical implementation details
-- All functionality is available as a web application (streamlit) - `app/`
 - The data is provided by the VZP insurance company and should be placed in the `data/raw_csv` folder
+- All functionality is available as a web application (streamlit) - `app/`
 - AI: the risk model is a decision tree trained on 15 features; two features are excluded because they are redundant: `invitation_sequence`, `months_since_last_screen`
   - the model has three targets, `screening 12m`, `6m` and `3m`, in order to provide a time perspective
   - feature importance is calculated in order to understand which features are the most important and to propose an intervention
