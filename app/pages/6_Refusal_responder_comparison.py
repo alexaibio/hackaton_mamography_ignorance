@@ -63,7 +63,7 @@ if shape.empty:
 chart_column, legend_column = st.columns([3, 2])
 
 with chart_column:
-    st.pyplot(radar_figure(shape, COLOURS))
+    st.pyplot(radar_figure(shape, COLOURS, label_size=14, size=8.0))
 
 with legend_column:
     st.caption(

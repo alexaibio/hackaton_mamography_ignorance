@@ -1,3 +1,5 @@
+import textwrap
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -139,26 +141,38 @@ def normalised_profile(
     )
 
 
-def radar_figure(shape: pd.DataFrame, colours: dict[str, str]):
+def radar_figure(
+    shape: pd.DataFrame,
+    colours: dict[str, str],
+    label_size: int = 8,
+    size: float = 6.0,
+):
     """The normalised profile as a radar. Series are drawn in the order given."""
     labels = [
-        name.replace("_cnt", "").replace("_flag", "").replace("_", " ") for name in shape.index
+        "\n".join(
+            textwrap.wrap(
+                name.replace("_cnt", "").replace("_flag", "").replace("_", " "), width=16
+            )
+        )
+        for name in shape.index
     ]
     angles = np.linspace(0, 2 * np.pi, len(labels), endpoint=False).tolist()
     closed = angles + angles[:1]
 
-    figure, axes = plt.subplots(figsize=(6, 6), subplot_kw={"polar": True})
+    figure, axes = plt.subplots(figsize=(size, size), subplot_kw={"polar": True})
     for series, colour in colours.items():
         values = shape[series].tolist()
         axes.plot(closed, values + values[:1], color=colour, linewidth=2, label=series)
         axes.fill(closed, values + values[:1], color=colour, alpha=0.15)
 
     axes.set_xticks(angles)
-    axes.set_xticklabels(labels, fontsize=8)
+    axes.set_xticklabels(labels, fontsize=label_size)
+    axes.tick_params(axis="x", pad=label_size)
     axes.set_yticks([0.25, 0.5, 0.75, 1.0])
     axes.set_yticklabels([])
     axes.set_ylim(0, 1.2)
-    axes.legend(loc="upper right", bbox_to_anchor=(1.35, 1.12))
+    axes.legend(loc="upper right", bbox_to_anchor=(1.3, 1.12), fontsize=label_size)
+    figure.tight_layout()
     return figure
 
 
