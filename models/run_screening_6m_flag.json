@@ -1,0 +1,35 @@
+{
+  "target": "screening_6m_flag",
+  "features": [
+    "age_band",
+    "vzp_territorial_area",
+    "gp_reg_duration_band",
+    "gyn_reg_duration_band",
+    "prior_invitation_count",
+    "months_last_invitation",
+    "healthcare_contact_12m_cnt",
+    "insurance_duration_years",
+    "prior_screen_count_5y",
+    "gp_prevention_24m_cnt",
+    "gyn_prevention_24m_cnt",
+    "other_screening_36m_cnt",
+    "dental_prevention_24m_cnt",
+    "first_invitation",
+    "gp_registered",
+    "gyn_registered_flag"
+  ],
+  "categorical": [
+    "age_band",
+    "vzp_territorial_area",
+    "gp_reg_duration_band",
+    "gyn_reg_duration_band"
+  ],
+  "test_size": 0.1,
+  "iterations": 1000,
+  "n_train": 1089436,
+  "n_valid": 120273,
+  "n_test": 134847,
+  "persons_test": 50853,
+  "best_iteration": 827,
+  "trained_at": "2026-10-17T08:01:32+00:00"
+}

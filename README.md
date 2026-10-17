@@ -1,12 +1,14 @@
 # Mammography ignorance analysis toolset
-This package provides a set of tools to analise FHIR Clinical data from 
-medical insurance company to predict which patient will ignore mammography invitations.
+This package provides a set of tools to analise VZP insurance company data about patients 
+who get invitation for mammography screenes but did not show up.
 
-The general flow:
-- get history of all eligible patients : wimen, age>40, only info for last 3 years (config.yaml)
-- flatten the data - create a flat csv file out of tree-like FHIR structures
-- do e simple exploratory analysis in notebook
-
+This set of tools are summarized as simple UX web interface (streamlit) with the following pages:
+- `Home` page - a general statistics: how many invitation we have, what is their location disctibution, age bands etc
+- `Rist Model` page - to run the model training and to analyse which features of this model are strong predictors
+- `Patient Risk` page - a page to calculate a risk of not reacting to invitation for a partucular patient profile
+- `Interventions` page - a list of parients who are not attended is shown with proposed interventions to improve the attendance. As part of the interventions emails are generated
+- `Resucal profile` page - 
+- 
 
 
 

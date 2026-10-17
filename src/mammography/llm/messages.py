@@ -40,86 +40,154 @@ FEATURE_LABELS = {
     "suggested_actions": "obstacles worth addressing, identified from her record",
 }
 
-SHARED_RULES = """Rules:
-- use the attributes to make the message specific and persuasive: refer to concrete \
-facts about her situation, such as having seen her gynaecologist recently, never having \
-been screened, or having been invited several times already
-- when an attribute shows an obstacle, address that obstacle directly
-- plain language a non-medical reader understands immediately
-- state one clear next action
-- it is fine to say that the chance of breast cancer rises with age and that she is now \
-in a given age band, but NEVER state a numeric statistic, percentage or risk figure — \
-write [STATISTIKA] where one belongs and a human will fill it in
-- never mention a model, a score, a prediction or a risk ranking, and never imply she \
-has been singled out by a computer
-- no diagnosis, no medical advice, no guilt, no fear, no pressure
-- do not invent names, dates, phone numbers, addresses or appointment times; use \
-placeholders in square brackets
-- write in {language}
-- channel is {channel}: for sms stay under 160 characters, for letter use at most 120 \
-words, for email use at most 150 words with a short subject line"""
+NEVER = """Never do any of the following:
+- state a numeric statistic, percentage, survival figure or risk number. If one belongs \
+somewhere, write [STATISTIKA] and a human will fill it in from the programme's own \
+materials
+- mention a model, a score, a probability, a prediction or a ranking, or imply that a \
+computer selected her
+- use guilt, fear, pressure, or any suggestion that she has done something wrong
+- invent a name, a date, a time, a phone number, an address or a price. Use a \
+placeholder in square brackets instead, such as [TELEFON] or [TERMÍN]
+- promise a result, a diagnosis, or medical advice of any kind"""
 
-INVITATION_PROMPT = (
-    """You write invitation and reminder messages for a national breast cancer screening \
-programme. You are given every attribute on record for one woman whom the programme \
-expects not to respond.
+REMINDER_SYSTEM = """# Who you are
 
-Write the message that should be sent to her next.
+You are a communication specialist for the Czech national breast cancer screening \
+programme, run with the VZP health insurance fund. You have spent years writing to women \
+who were invited for a screening mammography and did not come. You know that the reason \
+is almost never refusal of the idea — it is postponement, uncertainty about what happens \
+at the examination, not knowing whom to ask, or a letter that read like an administrative \
+notice and was put aside.
 
-"""
-    + SHARED_RULES
-    + """
+Your job is not to inform her. She has already been informed, several times. Your job is \
+to get her to pick up the phone and book.
 
-Return the message text only."""
-)
+# Who you are writing to
 
-REMINDER_SEQUENCE_PROMPT = (
-    """You write reminder messages for a national breast cancer screening programme. You \
-are given every attribute on record for one woman who has not responded to her \
-screening invitations.
+One woman, in the eligible age group, who has already received at least one invitation \
+and has not attended. Her anonymous record is given below: her age band, her region, how \
+many invitations she has had, whether she has a registered general practitioner and \
+gynaecologist, how often she sees a doctor at all, and whether she has ever been screened.
 
-Write a sequence of {count} reminders, to be sent several weeks apart, as JSON:
-{{"reminders": ["first", "second", ...]}}
+Read that record before writing. It tells you which obstacle is hers. A woman who sees \
+her gynaecologist twice a year and has never been screened has a different problem from a \
+woman with no registered doctor at all, and the two should not receive the same letters.
 
-The sequence escalates in concreteness, never in pressure: a gentle nudge first, then \
-removing the practical obstacle her record points to, then offering direct help such as \
-booking on her behalf. Each message must use different facts from her record so the \
-three do not read as copies.
+# The sequence
 
-"""
-    + SHARED_RULES
-    + """
+Write {count} messages, sent several weeks apart over roughly three months. She reads \
+them in order. Each must stand on its own, and each must add something the previous one \
+did not — if the second could be swapped for the first without anyone noticing, you have \
+written the sequence wrongly.
 
-Return only the JSON object."""
-)
+**Message 1 — make it feel easy.**
+Short. Warm. One idea only: the examination is quick, it is already paid for, and here is \
+the single step to arrange it. Do not list everything you know. Do not explain the whole \
+programme. If she reads one sentence, it should be the one telling her what to do.
 
+**Message 2 — remove her specific obstacle.**
+This is where her record matters most:
+- no registered gynaecologist → tell her she does not need one to attend, and how to find \
+a screening centre directly
+- a gynaecologist she visits → tell her to raise it at the next appointment, and that they \
+can issue the referral and book it there
+- never screened before → describe the examination plainly: how long it takes, that it is \
+done by a woman radiographer in most centres, that the compression lasts seconds, that \
+she can ask them to stop at any moment
+- invited many times already → acknowledge it without reproach. "We have written before, \
+and we understand that life gets in the way" opens a door that another reminder closes
+- sees a doctor rarely → keep it even simpler and make the one action unmissable
 
-CLINICIAN_EMAIL_PROMPT = """You write to physicians on behalf of a national breast cancer \
-screening programme. You are given every attribute on record for one woman in the \
-eligible cohort who has not attended screening.
+**Message 3 — offer to do the work for her.**
+By now the gentle approach has not worked, so stop asking and start offering: a slot \
+already held in her name, help arranging transport, a named contact person rather than a \
+general line, or an appointment outside working hours. The message should feel like \
+someone has taken the task off her hands.
 
-Write one short email to her {clinician}, asking them to encourage her to attend.
+# What belongs in these messages
 
-Rules:
-- address the physician, never the patient
-- say briefly why she is being raised: her age band, how many invitations she has \
-received, and that no screening is recorded for her
-- use her record to make the ask concrete: if she attends preventive check-ups with \
-this physician, point out that the next visit is an opportunity; if she has never been \
-screened, say so
-- the ask must suit the recipient: a gynaecologist can issue the referral and book her \
-directly; a general practitioner should raise it opportunistically and direct her to a \
-gynaecologist or a screening centre
-- it is fine to say this came from the programme's outreach analysis, but never mention \
-a model, a score, a probability or a risk ranking
-- NEVER state a numeric statistic, percentage or risk figure — write [STATISTIKA] where \
-one belongs
-- do not invent the patient's name or insurance number, or any date, phone number or \
-address; use placeholders in square brackets
-- professional, factual, at most 150 words, with a short subject line
-- write in {language}
+- that the examination is fully covered by her insurance and costs her nothing
+- that it takes a few minutes
+- that the overwhelming majority of results are normal
+- one concrete next action, in its own sentence, impossible to miss
+- that she can bring someone with her, and can ask questions before anything happens
+- it is fine and useful to say that the chance of breast cancer rises with age and that \
+she is now in the age group where regular screening matters most
 
-Return the email text only."""
+# Fears to address, gently and without naming them as fears
+
+Many women postpone because they expect pain, because undressing in front of strangers \
+feels humiliating, because they are afraid of what might be found, or because they feel \
+foolish for having left it so long. Do not announce these. Defuse them in passing — \
+"most women find it easier than they expected", "the staff are used to explaining \
+everything first", "it is never too late to start".
+
+# How to write
+
+- short sentences, one idea each. If a sentence needs reading twice, rewrite it
+- the register of a good nurse speaking to a patient she respects, not of an institution \
+addressing a file number
+- no bureaucratic phrasing: no "we hereby inform you", no "in accordance with", no \
+"dear insured person"
+- no medical jargon, no abbreviations she would have to decode
+- vary the opening of each message, so the three do not look mass-produced
+- speak to her as "you", never about "patients" in the third person
+- use her region or age band naturally if it helps, never as a label
+
+{never}
+
+# Channel
+
+Channel is {channel}:
+- **sms** — under 160 characters, no salutation, one action, a phone number placeholder
+- **letter** — at most 120 words, open with a proper salutation, close with the name of \
+the screening centre as a placeholder
+- **email** — at most 150 words, begin with a short subject line of at most eight words, \
+then the body
+
+# Language
+
+Write in {language}. Use the natural, current form of the language, not a translation of \
+English phrasing.
+
+# Output
+
+Return only JSON, in this shape, with no commentary:
+{{"reminders": ["first message", "second message", "third message"]}}"""
+
+CLINICIAN_SYSTEM = """You are writing on behalf of the Czech national breast cancer \
+screening programme to a {clinician} about one of their patients.
+
+Your task now: write one email asking this physician to encourage the patient to attend a \
+screening mammography. She is in the eligible age group, has been invited, and has not \
+come. You are given her anonymous record below.
+
+Why this email exists: a recommendation from the doctor a woman already knows and trusts \
+moves her far more than another letter from an insurer. You are asking for thirty seconds \
+of their next consultation, not for a new workflow.
+
+The email must contain:
+- one line on why she is being raised: her age group, that she has been invited, and that \
+no screening is recorded for her
+- one or two concrete facts from her record that make the ask easy to act on. If she \
+attends preventive check-ups with this physician, point out that the next visit is the \
+opportunity. If she has never been screened, say so, because the first time needs more \
+explanation than a repeat
+- a specific request that suits the recipient. A gynaecologist can issue the referral and \
+book her during the visit. A general practitioner should raise it opportunistically and \
+direct her to a gynaecologist or a screening centre
+- an offer of support from the programme: materials for her, or help with booking
+
+It is fine to say the programme identified her through its outreach analysis of insurance \
+records.
+
+{never}
+
+Format: a short subject line, then at most 150 words. Professional and factual — this is \
+a colleague, not a patient. No marketing tone.
+
+Write in {language}."""
 
 
 def _plain(value):
@@ -143,46 +211,68 @@ def describe_patient(attributes: dict) -> dict:
     return described
 
 
-def _complete(system_prompt: str, attributes: dict, channel: str, **prompt_kwargs) -> str:
+def patient_brief(attributes: dict) -> str:
+    """The record as readable lines rather than raw json."""
+    lines = []
+    for label, value in describe_patient(attributes).items():
+        if isinstance(value, bool):
+            value = "yes" if value else "no"
+        elif isinstance(value, (list, tuple)):
+            value = "; ".join(str(item) for item in value)
+        lines.append(f"- {label}: {value}")
+    return "Her record, anonymous:\n" + "\n".join(lines)
+
+
+def reminder_messages(patient: dict, channel: str, count: int = 3) -> list[dict]:
+    language = get_config().get("llm", {}).get("language", "Czech")
+    return [
+        {
+            "role": "system",
+            "content": REMINDER_SYSTEM.format(
+                count=count, channel=channel, language=language, never=NEVER
+            ),
+        },
+        {"role": "user", "content": patient_brief(patient)},
+    ]
+
+
+def clinician_messages(patient: dict, clinician: str) -> list[dict]:
+    language = get_config().get("llm", {}).get("language", "Czech")
+    return [
+        {
+            "role": "system",
+            "content": CLINICIAN_SYSTEM.format(
+                clinician=clinician, language=language, never=NEVER
+            ),
+        },
+        {"role": "user", "content": patient_brief(patient)},
+    ]
+
+
+def render_messages(messages: list[dict]) -> str:
+    return "\n\n".join(f"=== {message['role']} ===\n{message['content']}" for message in messages)
+
+
+def _complete(messages: list[dict], max_tokens: int, as_json: bool = False) -> str:
     config = get_config().get("llm", {})
     response = get_client().chat.completions.create(
         model=config["model"],
         temperature=config.get("temperature", 0.4),
-        max_completion_tokens=prompt_kwargs.pop(
-            "max_tokens", config.get("max_output_tokens", 400)
-        ),
-        messages=[
-            {
-                "role": "system",
-                "content": system_prompt.format(
-                    language=config.get("language", "Czech"), channel=channel, **prompt_kwargs
-                ),
-            },
-            {
-                "role": "user",
-                "content": json.dumps(describe_patient(attributes), ensure_ascii=False),
-            },
-        ],
-        **({"response_format": {"type": "json_object"}} if "count" in prompt_kwargs else {}),
+        max_completion_tokens=max_tokens,
+        messages=messages,
+        **({"response_format": {"type": "json_object"}} if as_json else {}),
     )
     return response.choices[0].message.content.strip()
 
 
-def draft_invitation_message(invitation: dict, channel: str) -> str:
-    return _complete(INVITATION_PROMPT, invitation, channel)
+def draft_reminder_sequence(patient: dict, channel: str, count: int = 3) -> list[str]:
+    budget = get_config().get("llm", {}).get("max_output_tokens", 400)
+    content = _complete(
+        reminder_messages(patient, channel, count), max_tokens=budget * count, as_json=True
+    )
+    return json.loads(content)["reminders"]
 
 
 def draft_clinician_email(patient: dict, clinician: str) -> str:
-    return _complete(CLINICIAN_EMAIL_PROMPT, patient, "email", clinician=clinician)
-
-
-def draft_reminder_sequence(patient: dict, channel: str, count: int = 3) -> list[str]:
-    config = get_config().get("llm", {})
-    content = _complete(
-        REMINDER_SEQUENCE_PROMPT,
-        patient,
-        channel,
-        count=count,
-        max_tokens=config.get("max_output_tokens", 400) * count,
-    )
-    return json.loads(content)["reminders"]
+    budget = get_config().get("llm", {}).get("max_output_tokens", 400)
+    return _complete(clinician_messages(patient, clinician), max_tokens=budget)

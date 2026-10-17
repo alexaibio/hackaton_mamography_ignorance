@@ -137,17 +137,26 @@ METADATA_FIELDS = (
 )
 
 
-def run_paths() -> dict[str, Path]:
-    folder = get_settings().models_folder
+def models_folder() -> Path:
+    return get_settings().models_folder
+
+
+def run_paths(target: str) -> dict[str, Path]:
+    folder = models_folder()
     return {
-        "model": folder / "model.cbm",
-        "metadata": folder / "run.json",
-        "predictions": folder / "test_predictions.csv",
+        "model": folder / f"model_{target}.cbm",
+        "metadata": folder / f"run_{target}.json",
+        "predictions": folder / f"test_predictions_{target}.csv",
     }
 
 
+def saved_targets() -> list[str]:
+    """Horizons that already have a model on disk."""
+    return sorted(path.stem.removeprefix("run_") for path in models_folder().glob("run_*.json"))
+
+
 def save_run(run: dict) -> Path:
-    paths = run_paths()
+    paths = run_paths(run["target"])
     paths["model"].parent.mkdir(parents=True, exist_ok=True)
 
     run["model"].save_model(str(paths["model"]))
@@ -163,8 +172,14 @@ def save_run(run: dict) -> Path:
     return paths["model"]
 
 
-def load_run() -> dict | None:
-    paths = run_paths()
+def load_run(target: str | None = None) -> dict | None:
+    if target is None:
+        available = saved_targets()
+        if not available:
+            return None
+        target = "screening_12m_flag" if "screening_12m_flag" in available else available[-1]
+
+    paths = run_paths(target)
     if not all(path.exists() for path in paths.values()):
         return None
 

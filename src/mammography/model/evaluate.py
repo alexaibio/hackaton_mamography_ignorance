@@ -8,7 +8,34 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
     roc_auc_score,
+    roc_curve,
 )
+
+
+def roc_frame(
+    screened: np.ndarray, screening_probability: np.ndarray, points: int = 200
+) -> tuple[pd.DataFrame, float]:
+    """ROC for the class we act on — flagged as likely to ignore — plus its area."""
+    ignored = 1 - screened
+    risk = 1 - screening_probability
+
+    false_positive, true_positive, _ = roc_curve(ignored, risk)
+    grid = np.linspace(0.0, 1.0, points)
+
+    frame = pd.DataFrame(
+        {"model": np.interp(grid, false_positive, true_positive), "random": grid},
+        index=pd.Index(grid, name="false positive rate"),
+    )
+    return frame, float(roc_auc_score(ignored, risk))
+
+
+def operating_point(
+    screened: np.ndarray, screening_probability: np.ndarray, threshold: float
+) -> tuple[float, float]:
+    """Where one threshold sits on that curve: (false positive rate, recall)."""
+    ignored = (1 - screened).astype(bool)
+    flagged = screening_probability < threshold
+    return float(flagged[~ignored].mean()), float(flagged[ignored].mean())
 
 
 def threshold_free_metrics(screened: np.ndarray, screening_probability: np.ndarray) -> dict:

@@ -1,22 +1,35 @@
+import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
 from mammography.config import get_config
 from mammography.io import read_table
-from mammography.model.evaluate import ignore_class_metrics
+from mammography.model.evaluate import ignore_class_metrics, operating_point, roc_frame
 from mammography.model.train import (
     HORIZON_FLAGS,
     feature_columns,
     feature_importance,
     load_run,
+    models_folder,
     rebuild_test_pool,
     run_paths,
     save_run,
+    saved_targets,
     train_model,
 )
 
 IMPORTANCE_METHODS = ("PredictionValuesChange", "LossFunctionChange")
-DEFAULT_OFF = ("months_since_last_screen", "invitation_sequence", "prior_invitation_count")
+EXTREME_FEATURES = 7
+
+# redundant with a feature that is kept, so off by default:
+#   invitation_sequence        — the same number as prior_invitation_count
+#   months_since_last_screen   — null exactly when prior_screen_count_5y is 0
+#   never_screened_before_flag — true exactly when prior_screen_count_5y is 0
+DEFAULT_OFF = (
+    "invitation_sequence",
+    "months_since_last_screen",
+    "never_screened_before_flag",
+)
 
 st.set_page_config(page_title="Risk model", layout="wide")
 
@@ -45,7 +58,7 @@ if "run" not in st.session_state:
 existing = st.session_state.get("run")
 
 if existing is None:
-    st.warning(f"No saved model in {run_paths()['model'].parent}.")
+    st.warning(f"No saved model in {models_folder()}.")
     trained_on = {column for column in ALL_FEATURES if column not in DEFAULT_OFF}
 else:
     trained_on = set(existing["features"])
@@ -95,23 +108,38 @@ with st.form("training"):
         "a random row split would leak her behaviour across the boundary."
     )
 
+    all_horizons = st.checkbox(
+        "Also train the other two horizons",
+        value=False,
+        help=(
+            "needed for the response-speed profile on the Patient risk page; triples the "
+            "training time, so lower the iterations first"
+        ),
+    )
+
     train_requested = st.form_submit_button(
         "Re-train the model" if existing is not None else "Train the model", type="primary"
     )
 
 if train_requested:
-    with st.spinner(f"Training CatBoost on {len(selected)} features..."):
-        run = train_model(
-            invitations,
-            target,
-            iterations=int(iterations),
-            test_size=test_size,
-            selected=selected,
-        )
-        save_run(run)
-        st.session_state["run"] = run
-        trained_on = set(run["features"])
-    st.toast(f"Saved to {run_paths()['model']}")
+    horizons = [target]
+    if all_horizons:
+        horizons += [flag for flag in HORIZON_FLAGS if flag != target]
+
+    for horizon in horizons:
+        with st.spinner(f"Training `{horizon}` on {len(selected)} features..."):
+            trained = train_model(
+                invitations,
+                horizon,
+                iterations=int(iterations),
+                test_size=test_size,
+                selected=selected,
+            )
+            save_run(trained)
+            if horizon == target:
+                st.session_state["run"] = trained
+                trained_on = set(trained["features"])
+        st.toast(f"Saved {run_paths(horizon)['model'].name}")
 
 run = st.session_state.get("run")
 
@@ -128,6 +156,18 @@ st.success(
     f"Trained on {run['n_train']:,} invitations, validated on {run['n_valid']:,}, "
     f"tested on {run['n_test']:,} ({run['persons_test']:,} patients). "
     f"Trained at {run.get('trained_at', 'this session')}."
+)
+
+available = saved_targets()
+st.caption(
+    "Horizons with a saved model: "
+    + ", ".join(f"`{horizon}`" for horizon in available)
+    + (
+        ""
+        if len(available) == len(HORIZON_FLAGS)
+        else " — tick *Also train the other two horizons* to enable the response-speed "
+        "profile on the Patient risk page."
+    )
 )
 
 with st.expander(f"The {len(run['features'])} features this model was trained on"):
@@ -156,24 +196,6 @@ if unticked or newly_ticked:
         + (f"- added since training: `{'`, `'.join(sorted(newly_ticked))}`" if newly_ticked else "")
     )
 
-st.header("Performance on the held-out test set")
-
-with st.form("threshold"):
-    threshold = st.slider(
-        "Decision threshold on the probability of screening", 0.01, 0.99, 0.5, 0.01
-    )
-    st.form_submit_button("Apply")
-
-st.subheader("The class we act on — flagged as likely to ignore")
-st.caption(
-    "An invitation is flagged when the predicted probability of screening falls below "
-    "the threshold."
-)
-
-st.table(
-    pd.Series(ignore_class_metrics(screened, probability, threshold)).round(4).to_frame("value")
-)
-
 st.header("Most important features")
 
 method = st.radio("Method", IMPORTANCE_METHODS, horizontal=True)
@@ -194,8 +216,91 @@ st.subheader("The extremes")
 
 strongest, weakest = st.columns(2)
 with strongest:
-    st.markdown("#### 5 most important — what the model leans on")
-    st.table(importance.head(5).round(3))
+    st.markdown(f"#### {EXTREME_FEATURES} most important — what the model leans on")
+    st.table(importance.head(EXTREME_FEATURES).round(3))
 with weakest:
-    st.markdown("#### 5 least important — candidates to untick and retrain without")
-    st.table(importance.tail(5).round(3))
+    st.markdown(
+        f"#### {EXTREME_FEATURES} least important — candidates to untick and retrain without"
+    )
+    st.table(importance.tail(EXTREME_FEATURES).round(3))
+
+if len(importance) < 2 * EXTREME_FEATURES:
+    st.caption(
+        f"The model has {len(importance)} features, so the two lists overlap — some "
+        "features appear in both."
+    )
+
+st.header("Performance on the held-out test set")
+
+st.caption(
+    "An invitation is flagged when the predicted probability of screening falls below "
+    f"the threshold. Non-response is {1 - screened.mean():.1%} of the test set, so "
+    "flagging everything would already give that precision — the model has to beat it."
+)
+
+if "threshold_value" not in st.session_state:
+    st.session_state["threshold_value"] = 0.5
+
+
+def remember_threshold() -> None:
+    # a plain key survives leaving the page; a widget key is garbage collected
+    st.session_state["threshold_value"] = st.session_state["threshold_slider"]
+
+
+threshold = st.slider(
+    "Decision threshold on the probability of screening",
+    0.01,
+    0.99,
+    value=st.session_state["threshold_value"],
+    step=0.01,
+    key="threshold_slider",
+    on_change=remember_threshold,
+    help="applies immediately — the table and the marker on the curve both follow it",
+)
+
+curve, auc = roc_frame(screened, probability)
+false_positive_rate, recall = operating_point(screened, probability, threshold)
+flagged_share = float((probability < threshold).mean())
+
+metrics_column, curve_column = st.columns([2, 3])
+
+with metrics_column:
+    st.subheader("At this threshold")
+    st.table(
+        pd.Series(ignore_class_metrics(screened, probability, threshold))
+        .round(4)
+        .to_frame("value")
+    )
+    st.metric("Share of the cohort flagged", f"{flagged_share:.1%}")
+    st.caption(
+        "Flagging almost everyone gets high recall for free. The number worth watching "
+        "is precision against the base rate above."
+    )
+
+with curve_column:
+    st.subheader("ROC curve")
+    figure, axes = plt.subplots(figsize=(5, 5))
+    axes.plot(curve.index, curve["model"], label=f"model (AUC {auc:.3f})")
+    axes.plot([0, 1], [0, 1], linestyle="--", linewidth=1, label="random")
+    axes.scatter(
+        [false_positive_rate],
+        [recall],
+        color="crimson",
+        zorder=5,
+        label=f"threshold {threshold:.2f}",
+    )
+    axes.axvline(false_positive_rate, color="crimson", linewidth=0.5, linestyle=":")
+    axes.axhline(recall, color="crimson", linewidth=0.5, linestyle=":")
+    axes.set_xlabel("false positive rate — women who do come, wrongly flagged")
+    axes.set_ylabel("true positive rate — non-responders caught (recall)")
+    axes.set_xlim(0, 1)
+    axes.set_ylim(0, 1)
+    axes.legend(loc="lower right")
+    st.pyplot(figure)
+
+    st.caption(
+        f"The curve itself does not move with the threshold — it is drawn across every "
+        f"threshold, which is what makes **AUC {auc:.4f}** a judgement of the model "
+        "rather than of one operating point. The red dot is where this threshold puts "
+        "you. 0.65-0.75 is a genuinely useful AUC for administrative data."
+    )

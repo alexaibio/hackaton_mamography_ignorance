@@ -74,26 +74,14 @@ three.metric("within 3 months", f"{persons['screening_3m_flag'].mean():.1%}")
 
 st.header("Non-responders")
 
-st.markdown(
-    """
-Every table below breaks the invitations into groups and reports two different
-percentages. They answer different questions and only one of them adds up to 100%.
-
-| Column | Denominator | Question it answers | Adds up to 100%? |
-| --- | --- | --- | --- |
-| `invitations` | — | how many invitations fall in this group | no, it sums to the total |
-| `non_responders` | — | how many of those had no screening in the horizon | no, it sums to all non-responders |
-| `non_response_%` | the group itself | **within this group**, what share did not respond | **no** — each row is independent |
-| `share_of_non_responders_%` | all non-responders | **of every non-responder**, what share sits in this group | **yes** |
-
-So a small group can show a high `non_response_%` while contributing a tiny
-`share_of_non_responders_%`: the behaviour is bad there, but few people are affected.
-Use `non_response_%` to decide *who* to target and `share_of_non_responders_%` to see
-*where the volume* is.
-"""
-)
 
 st.subheader("By age band")
+
+st.markdown(
+    "- `non_response_%` - pecentage og non responders among all invitation\n"
+    "- `share_of_non_responders_%` — share of this age among non-responders\n"
+)
+
 age = breakdown(invitations, "age_band", target)
 age_left, age_right = st.columns([3, 2])
 age_left.table(age)
@@ -102,11 +90,10 @@ age_right.bar_chart(age["non_response_%"])
 st.subheader("By general medical activity")
 
 st.markdown(
-    "All three are measured at **T0, the invitation date**. "
-    "`gp_registered` — had a valid registration with a general practitioner "
-    "(specialties 001, 002) at T0; `true` means registered. "
-    "`gyn_registered_flag` — the same for a gynaecologist (specialties 603, 604). "
-    "Healthcare contacts — number of contacts with any provider in the 12 months "
+    "- **T0 - the invitation date**\n\n"
+    "- `gp_registered` — had a valid registration with a general practitioner\n"
+    "- `gyn_registered_flag` — the same for a gynaecologist\n"
+    "- Healthcare contacts — number of contacts with any provider in the 12 months "
     "*before* T0, so it describes her engagement before the invitation was sent, "
     "never after."
 )

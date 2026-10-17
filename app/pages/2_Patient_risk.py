@@ -2,12 +2,20 @@ import pandas as pd
 import streamlit as st
 from catboost import Pool
 
-from mammography.config import get_config, get_settings
+from mammography.config import get_config
+from mammography.interventions import TEXTS_FILE, proposed_interventions
 from mammography.io import read_table
-from mammography.model.train import MISSING, feature_columns
+from mammography.model.train import MISSING, feature_columns, load_run, saved_targets
 
-INTERVENTIONS_FILE = "proposed_correction.csv"
 TOP_DRIVERS = 5
+
+HORIZON_LABELS = {
+    "screening_3m_flag": "within 3 months",
+    "screening_6m_flag": "within 6 months",
+    "screening_12m_flag": "within 12 months",
+}
+UNLIKELY_AT_ANY_HORIZON = 0.20
+LATE_RESPONDER_GAP = 0.10
 
 st.set_page_config(page_title="Patient risk", layout="wide")
 
@@ -18,13 +26,8 @@ def load_invitations() -> pd.DataFrame:
 
 
 @st.cache_data
-def proposed_interventions() -> dict[str, str]:
-    path = get_settings().data_folder / INTERVENTIONS_FILE
-    if not path.exists():
-        return {}
-    table = pd.read_csv(path)
-    feature_column, text_column = table.columns[:2]
-    return dict(zip(table[feature_column].astype(str), table[text_column].astype(str)))
+def intervention_texts() -> dict[str, str]:
+    return proposed_interventions()
 
 
 @st.cache_data
@@ -93,21 +96,81 @@ pool = Pool(row, cat_features=run["categorical"])
 response_probability = float(run["model"].predict_proba(pool)[0, 1])
 risk = 1 - response_probability
 
-test_risk = 1 - run["screening_probability"]
-percentile = float((test_risk < risk).mean())
-
 st.header("Prediction")
 
-left, middle, right = st.columns(3)
+left, right = st.columns(2)
 left.metric("Probability she responds", f"{response_probability:.1%}")
-middle.metric("Risk of ignoring", f"{risk:.1%}")
-right.metric(
-    "Riskier than",
-    f"{percentile:.0%} of the test set",
-    help="where this patient sits among the held-out invitations, ranked by risk",
-)
+right.metric("Risk of ignoring", f"{risk:.1%}")
 
 st.progress(risk, text=f"risk of ignoring: {risk:.1%}")
+
+st.header("Response speed")
+
+horizon_runs = {}
+for horizon in HORIZON_LABELS:
+    other = run if horizon == run["target"] else load_run(horizon)
+    if other is not None and set(other["features"]) <= set(patient):
+        horizon_runs[horizon] = other
+
+if len(horizon_runs) < len(HORIZON_LABELS):
+    st.info(
+        "Needs a model for all three horizons. On the **Risk model** page tick "
+        "*Also train the other two horizons* and retrain. "
+        f"Currently saved: {', '.join(f'`{name}`' for name in saved_targets()) or 'none'}."
+    )
+else:
+    speeds = {}
+    for horizon, other in horizon_runs.items():
+        horizon_row = pd.DataFrame([patient])[other["features"]]
+        for column in other["categorical"]:
+            horizon_row[column] = horizon_row[column].astype(str)
+        speeds[horizon] = float(
+            other["model"].predict_proba(
+                Pool(horizon_row, cat_features=other["categorical"])
+            )[0, 1]
+        )
+
+    three, six, twelve = (
+        speeds["screening_3m_flag"],
+        speeds["screening_6m_flag"],
+        speeds["screening_12m_flag"],
+    )
+
+    if twelve < UNLIKELY_AT_ANY_HORIZON:
+        verdict = "Unlikely to attend at any horizon"
+        advice = (
+            "a reminder on its own will probably not move her — the GP or gynaecologist "
+            "route is the better lever"
+        )
+    elif twelve - three >= LATE_RESPONDER_GAP:
+        verdict = "Late responder"
+        advice = (
+            "she does attend, but not promptly — timing is the lever, so a reminder a few "
+            "weeks after the invitation is worth more than a stronger first letter"
+        )
+    else:
+        verdict = "Prompt responder"
+        advice = "if she attends at all she attends early; no extra contact needed"
+
+    speed_columns = st.columns(3)
+    for column, (horizon, probability) in zip(speed_columns, speeds.items()):
+        column.metric(HORIZON_LABELS[horizon], f"{probability:.1%}")
+
+    st.markdown(f"#### {verdict}")
+    st.caption(f"Probability of responding by each horizon. {advice}.")
+    st.bar_chart(
+        pd.Series(
+            {HORIZON_LABELS[horizon]: value for horizon, value in speeds.items()},
+            name="probability of responding",
+        )
+    )
+
+    if not three <= six <= twelve:
+        st.caption(
+            "The three horizons are modelled independently, so their probabilities are "
+            "not forced to increase. The ordering is broken here, which usually means "
+            "the models disagree about a patient in a thin region of the data."
+        )
 
 st.header("What drives this prediction")
 
@@ -116,7 +179,7 @@ contributions = pd.Series(shap_values[0, :-1], index=run["features"])
 ranked = contributions.reindex(contributions.abs().sort_values(ascending=False).index)
 
 top = ranked.head(TOP_DRIVERS)
-texts = proposed_interventions()
+texts = intervention_texts()
 
 drivers = pd.DataFrame(
     {
@@ -137,9 +200,9 @@ st.caption(
 
 if not texts:
     st.warning(
-        f"No intervention texts loaded. Expected `{INTERVENTIONS_FILE}` in "
-        f"`{get_settings().data_folder}`, with the feature name in the first column "
-        "and the text to show in the second."
+        f"No intervention texts loaded. Expected `{TEXTS_FILE}` next to the "
+        "`mammography` package or in the data folder, with the feature name in the "
+        "first column and the text to show in the second."
     )
 else:
     unmapped = [name for name in top.index if name not in texts]

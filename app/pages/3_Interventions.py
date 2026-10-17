@@ -1,19 +1,34 @@
+import html
+
 import pandas as pd
 import streamlit as st
 from catboost import Pool
 
-from mammography.config import get_config, get_settings
+from mammography.config import get_config
+from mammography.interventions import TEXTS_FILE, proposed_interventions
 from mammography.io import read_table
 from mammography.llm.messages import (
-    describe_patient,
+    clinician_messages,
     draft_clinician_email,
     draft_reminder_sequence,
+    reminder_messages,
+    render_messages,
 )
 from mammography.model.train import MISSING, feature_columns, load_run
 
-INTERVENTIONS_FILE = "proposed_correction.csv"
 CANDIDATE_LIMIT = 2000
 MAX_STEPS = 3
+
+# how each proposed change reads in a sentence
+ACTION_PHRASES = {
+    "gyn_registered_flag": "register her with a gynaecologist",
+    "gp_registered": "register her with a general practitioner",
+    "gyn_prevention_24m_cnt": "bring her to one preventive visit at the gynaecologist",
+    "gp_prevention_24m_cnt": "bring her to one preventive visit at the GP",
+    "other_screening_36m_cnt": "invite her to one other screening programme",
+    "dental_prevention_24m_cnt": "get her to one dental preventive check-up",
+    "healthcare_contact_12m_cnt": "get her one more contact with any doctor",
+}
 
 # what an intervention could realistically move, and the value it would move it to
 IMPROVEMENTS = {
@@ -48,13 +63,8 @@ def person_summary(target: str) -> pd.DataFrame:
 
 
 @st.cache_data
-def proposed_interventions() -> dict[str, str]:
-    path = get_settings().data_folder / INTERVENTIONS_FILE
-    if not path.exists():
-        return {}
-    table = pd.read_csv(path)
-    feature_column, text_column = table.columns[:2]
-    return dict(zip(table[feature_column].astype(str), table[text_column].astype(str)))
+def intervention_texts() -> dict[str, str]:
+    return proposed_interventions()
 
 
 def feature_frame(rows: pd.DataFrame, features: list[str], categorical: set, booleans: set):
@@ -132,7 +142,7 @@ st.caption(
     f"horizon of any invitation (`{run['target']}`)."
 )
 
-st.header("Select a patient")
+st.header("Choose the patient with high risk of not responding")
 
 band_column, area_column = st.columns(2)
 bands = band_column.multiselect("Age band", sorted(refusers["age_band"].unique()))
@@ -178,7 +188,7 @@ st.caption(
 selection = st.dataframe(
     scored,
     width="stretch",
-    height=360,
+    height=215,
     on_select="rerun",
     selection_mode="single-row",
     column_config={
@@ -192,7 +202,7 @@ chosen_rows = selection.selection.rows
 position = chosen_rows[0] if chosen_rows else 0
 person_id = scored.index[position]
 
-st.header(f"Patient {person_id}")
+st.header(f"Selected patient {person_id}")
 
 person = summary.loc[person_id]
 history = invitations[invitations["person_id"] == person_id].sort_values("invitation_date")
@@ -205,7 +215,12 @@ third.metric(
     "Invited between",
     f"{person['first_invitation']:%b %Y} – {person['last_invitation']:%b %Y}",
 )
-fourth.metric("Screened in 5y before", int(latest["prior_screen_count_5y"]))
+screened_before = int(latest["prior_screen_count_5y"])
+with fourth:
+    st.caption("Screened in 5y before")
+    st.markdown(f"### :red[{screened_before}]")
+    if screened_before == 0:
+        st.caption(":red[never screened — the clearest signal she is not attending]")
 
 context = pd.DataFrame(
     [
@@ -241,22 +256,16 @@ invitations_column.dataframe(
     hide_index=True,
 )
 
-st.header("Proposed intervention")
+st.header("Proposed interventions to motivate to come to screening")
 
 actionable = [column for column in run["features"] if column in IMPROVEMENTS]
-held_fixed = [column for column in run["features"] if column not in IMPROVEMENTS]
 
 st.caption(
     f"Only {len(actionable)} of the model's {len(run['features'])} features can be moved "
     "by an intervention. The rest are demography or history and are held fixed."
 )
 
-fixed_left, fixed_right = st.columns(2)
-fixed_left.success("**Can be changed**\n\n" + "\n".join(f"- `{name}`" for name in actionable))
-fixed_right.error(
-    "**Held fixed** — age, region, insurance tenure and screening history\n\n"
-    + "\n".join(f"- `{name}`" for name in held_fixed)
-)
+st.success("**Can be changed**\n\n" + "\n".join(f"- `{name}`" for name in actionable))
 
 baseline_row = feature_frame(
     latest.to_frame().T, run["features"], categorical, booleans
@@ -267,25 +276,28 @@ steps, final_risk = propose_changes(
     run["model"], baseline_row, run["categorical"], run["features"]
 )
 
-current_column, arrow_column, after_column = st.columns(3)
-current_column.metric("Current risk of refusal", f"{baseline_risk:.1%}")
-after_column.metric(
-    "Risk after the intervention",
-    f"{final_risk:.1%}",
-    delta=f"{(final_risk - baseline_risk) * 100:+.1f} pp",
-    delta_color="inverse",
-)
-arrow_column.metric("Reduction", f"{(baseline_risk - final_risk) * 100:.1f} pp")
-
-texts = proposed_interventions()
+texts = intervention_texts()
 
 if not steps:
     st.warning(
         "No single actionable feature reduces this patient's risk. Everything the model "
         "relies on for her is history or demography, which an intervention cannot change."
     )
+    st.metric("Risk of refusal, unchanged", f"{baseline_risk:.1%}")
 else:
-    st.caption("Features to change, in the order that reduces risk fastest:")
+    st.markdown("#### What we propose for her")
+    st.markdown(
+        "\n".join(
+            f"{position}. {ACTION_PHRASES.get(step['feature'], step['feature'])}"
+            for position, step in enumerate(steps, start=1)
+        )
+    )
+    st.caption(
+        f"{len(steps)} change"
+        + ("s" if len(steps) > 1 else "")
+        + ", in the order that reduces risk fastest. Each row shows the risk once that "
+        "change and every change above it has been made."
+    )
     st.table(
         pd.DataFrame(
             [
@@ -302,32 +314,61 @@ else:
     )
     if not texts:
         st.caption(
-            f"No intervention texts loaded — add `{INTERVENTIONS_FILE}` to "
-            f"`{get_settings().data_folder}` with the feature name in the first column."
+            f"No intervention texts loaded — add `{TEXTS_FILE}` next to the "
+            "`mammography` package with the feature name in the first column."
         )
 
-st.header("Reminder to patient")
+    current_column, reduction_column, after_column = st.columns(3)
+    current_column.metric("Risk of refusal as she is now", f"{baseline_risk:.1%}")
+    reduction_column.metric(
+        "Reduction from the changes above", f"{(baseline_risk - final_risk) * 100:.1f} pp"
+    )
+    after_column.metric(
+        f"Risk after all {len(steps)} changes above",
+        f"{final_risk:.1%}",
+        delta=f"{(final_risk - baseline_risk) * 100:+.1f} pp",
+        delta_color="inverse",
+    )
+    st.caption(
+        "The model's estimate of her risk if her record looked that way instead. It is an "
+        "association the model learned, not a guarantee that making these changes causes "
+        "the drop."
+    )
 
-channel = st.selectbox("Channel", ["letter", "sms", "email"])
+CLINICIANS = (
+    ("gynaecologist", "gyn_registered_flag", "gyn_email"),
+    ("general practitioner", "gp_registered", "gp_email"),
+)
 
 patient = latest.to_dict()
-patient["notification_channel"] = channel
 patient["invitation_count"] = int(person["invitations"])
 if steps:
     patient["suggested_actions"] = [texts.get(step["feature"], step["feature"]) for step in steps]
 
-with st.expander("What is sent to the model"):
-    st.json(describe_patient(patient))
+st.header("Reminder to patient")
 
-if st.button("Create three consecutive reminders", type="primary"):
-    with st.spinner("Drafting the sequence..."):
-        st.session_state["reminders"] = draft_reminder_sequence(patient, channel, count=3)
+REMINDER_PURPOSE = (
+    "sent first — make attending feel easy",
+    "sent a few weeks later — remove her specific obstacle",
+    "sent last — offer to do the work for her",
+)
 
 reminders = st.session_state.get("reminders")
-if reminders:
+if not reminders:
+    st.info("Press **Generate all texts** at the bottom of the page.")
+else:
     for position, text in enumerate(reminders, start=1):
-        st.subheader(f"Reminder {position}")
-        st.text_area(f"reminder_{position}", text, height=200, label_visibility="collapsed")
+        purpose = (
+            REMINDER_PURPOSE[position - 1] if position <= len(REMINDER_PURPOSE) else ""
+        )
+        with st.container(border=True):
+            st.markdown(f"### Reminder {position}")
+            st.caption(purpose)
+            st.markdown(
+                "<div style='font-size:1.35rem; line-height:1.65; white-space:pre-wrap'>"
+                f"{html.escape(text)}</div>",
+                unsafe_allow_html=True,
+            )
     st.caption(
         "`[STATISTIKA]` and other bracketed placeholders are deliberate — the model is "
         "told never to invent a risk figure, date or phone number."
@@ -340,32 +381,48 @@ st.caption(
     "system fills those in, they are never passed to the model."
 )
 
-CLINICIANS = (
-    ("gynaecologist", "gyn_registered_flag", "gyn_email"),
-    ("general practitioner", "gp_registered", "gp_email"),
-)
-
 doctor_columns = st.columns(2)
 
 for (clinician, flag, state_key), column in zip(CLINICIANS, doctor_columns):
     with column:
         st.subheader(f"To her {clinician}")
-        registered = bool(latest[flag])
-
-        if not registered:
+        if not bool(latest[flag]):
             st.warning(
                 f"She has no registered {clinician}, so there is nobody to write to. "
                 "Helping her register is itself the intervention."
             )
             continue
 
-        if st.button(f"Draft the email to her {clinician}", key=f"button_{state_key}"):
-            with st.spinner("Drafting..."):
-                st.session_state[state_key] = draft_clinician_email(patient, clinician)
+        email = st.session_state.get(state_key)
+        if not email:
+            st.info("Press **Generate all texts** at the bottom of the page.")
+            continue
 
-        st.text_area(
-            state_key,
-            st.session_state.get(state_key, ""),
-            height=300,
-            label_visibility="collapsed",
-        )
+        st.text_area(state_key, email, height=320, label_visibility="collapsed")
+
+st.divider()
+st.header("Generate")
+
+channel = st.selectbox("Channel for the patient messages", ["letter", "sms", "email"])
+patient["notification_channel"] = channel
+
+recipients = [
+    (clinician, state_key)
+    for clinician, flag, state_key in CLINICIANS
+    if bool(latest[flag])
+]
+
+with st.expander("What is sent to the model"):
+    st.caption("The patient reminders")
+    st.code(render_messages(reminder_messages(patient, channel, count=3)), language=None)
+    for clinician, _ in recipients:
+        st.caption(f"The email to her {clinician}")
+        st.code(render_messages(clinician_messages(patient, clinician)), language=None)
+
+if st.button("Generate all texts", type="primary"):
+    with st.spinner("Drafting the three reminders..."):
+        st.session_state["reminders"] = draft_reminder_sequence(patient, channel, count=3)
+    for clinician, state_key in recipients:
+        with st.spinner(f"Drafting the email to her {clinician}..."):
+            st.session_state[state_key] = draft_clinician_email(patient, clinician)
+    st.rerun()
