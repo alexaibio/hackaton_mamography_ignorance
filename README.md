@@ -1,14 +1,15 @@
 # Mammography ignorance analysis toolset
-This package provides a set of tools to analise VZP insurance company data about patients 
-who get invitation for mammography screenes but did not show up.
+This package provides a set of tools to analyse VZP insurance company data about patients
+who were invited for a mammography screening but did not show up.
 
-This set of tools are summarized as simple UX web interface (streamlit) with the following pages:
-- `Home` page - a general statistics: how many invitation we have, what is their location disctibution, age bands etc
-- `Rist Model` page - to run the model training and to analyse which features of this model are strong predictors
-- `Patient Risk` page - a page to calculate a risk of not reacting to invitation for a partucular patient profile
-- `Interventions` page - a list of parients who are not attended is shown with proposed interventions to improve the attendance. As part of the interventions emails are generated
-- `Resucal profile` page - 
-- 
+The tools are presented as a simple web interface (streamlit) with the following pages:
+- `Home` page - general statistics: how many invitations we have, how they are distributed across locations, age bands and so on
+- `Risk model` page - to run the model training and to analyse which of its features are strong predictors
+- `Patient risk` page - to calculate the risk of not reacting to an invitation for a particular patient profile
+- `Interventions` page - a list of patients who did not attend, with proposed interventions to improve attendance. Emails are generated as part of the interventions
+- `Refusal profile` page - a portrait of the women who never attend: for the most important features of the trained model, the typical value of each one, plus a radar chart of the group against the whole population
+- `Responder profile` page - the mirror image, the women who do attend reliably. This is the behaviour an intervention is trying to produce, so the same features are shown the same way
+- `Refusal/responder comparison` page - one radar chart putting the two groups directly against each other. Every patient is in exactly one of them: never screened after any invitation, or screened after at least one
 
 
 

@@ -8,6 +8,7 @@ from mammography.io import read_table
 from mammography.model.train import MISSING, feature_columns, load_run, saved_targets
 
 TOP_DRIVERS = 5
+DEFAULT_CATEGORIES = {"age_band": "50-54"}
 
 HORIZON_LABELS = {
     "screening_3m_flag": "within 3 months",
@@ -71,7 +72,13 @@ with st.form("patient_form"):
     for position, column in enumerate(run["features"]):
         widget = widgets[position % 3]
         if column in categorical:
-            entered[column] = widget.selectbox(column, category_options(column))
+            options = category_options(column)
+            preferred = DEFAULT_CATEGORIES.get(column)
+            entered[column] = widget.selectbox(
+                column,
+                options,
+                index=options.index(preferred) if preferred in options else 0,
+            )
         elif column in booleans:
             entered[column] = int(widget.checkbox(column, value=True))
         else:

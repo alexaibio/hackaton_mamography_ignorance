@@ -222,24 +222,32 @@ with fourth:
     if screened_before == 0:
         st.caption(":red[never screened — the clearest signal she is not attending]")
 
-context = pd.DataFrame(
-    [
-        ("VZP area", latest["vzp_territorial_area"]),
-        ("Insured with VZP, years", latest["insurance_duration_years"]),
-        ("Registered with a GP", latest["gp_registered"]),
-        ("Registered with a gynaecologist", latest["gyn_registered_flag"]),
-        ("Never screened before", latest["never_screened_before_flag"]),
-        ("Healthcare contacts, 12m", latest["healthcare_contact_12m_cnt"]),
-        ("GP prevention visits, 24m", latest["gp_prevention_24m_cnt"]),
-        ("Gyn prevention visits, 24m", latest["gyn_prevention_24m_cnt"]),
-        ("Other screening, 36m", latest["other_screening_36m_cnt"]),
-        ("Dental prevention, 24m", latest["dental_prevention_24m_cnt"]),
-    ],
-    columns=["Attribute", "At the last invitation"],
-).set_index("Attribute")
+def yes_no(value) -> str:
+    return "yes" if bool(value) else "no"
+
+
+context_lines = [
+    f"- VZP area: **{latest['vzp_territorial_area']}**",
+    f"- Insured with VZP for **{int(latest['insurance_duration_years'])} years**",
+    f"- Registered with a GP: **{yes_no(latest['gp_registered'])}**"
+    f" (registration band {latest['gp_reg_duration_band'] or 'n/a'})",
+    f"- Registered with a gynaecologist: **{yes_no(latest['gyn_registered_flag'])}**"
+    f" (registration band {latest['gyn_reg_duration_band'] or 'n/a'})",
+    f"- Never screened before: **{yes_no(latest['never_screened_before_flag'])}**",
+    f"- Contacts with any doctor in 12 months: **{int(latest['healthcare_contact_12m_cnt'])}**",
+    f"- Preventive check-ups at the GP in 24 months: "
+    f"**{int(latest['gp_prevention_24m_cnt'])}**",
+    f"- Preventive check-ups at the gynaecologist in 24 months: "
+    f"**{int(latest['gyn_prevention_24m_cnt'])}**",
+    f"- Other screening programmes in 36 months: "
+    f"**{int(latest['other_screening_36m_cnt'])}**",
+    f"- Dental preventive check-ups in 24 months: "
+    f"**{int(latest['dental_prevention_24m_cnt'])}**",
+]
 
 context_column, invitations_column = st.columns([2, 3])
-context_column.table(context)
+context_column.caption("At her last invitation")
+context_column.markdown("\n".join(context_lines))
 invitations_column.caption("Every invitation she received")
 invitations_column.dataframe(
     history[
@@ -264,8 +272,6 @@ st.caption(
     f"Only {len(actionable)} of the model's {len(run['features'])} features can be moved "
     "by an intervention. The rest are demography or history and are held fixed."
 )
-
-st.success("**Can be changed**\n\n" + "\n".join(f"- `{name}`" for name in actionable))
 
 baseline_row = feature_frame(
     latest.to_frame().T, run["features"], categorical, booleans

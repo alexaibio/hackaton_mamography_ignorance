@@ -3,9 +3,17 @@ import streamlit as st
 
 from mammography.io import read_table
 from mammography.model.train import load_run
-from mammography.profiles import feature_groups, most_important, person_level, profile
+from mammography.profiles import (
+    feature_groups,
+    most_important,
+    normalised_profile,
+    person_level,
+    profile,
+    radar_figure,
+)
 
 PROFILE_FEATURES = 8
+GROUP_LABEL = "refusal group"
 
 st.set_page_config(page_title="Refusal profile", layout="wide")
 
@@ -56,3 +64,39 @@ st.caption(
     "patient."
 )
 st.table(profile(refusers, groups))
+
+st.header("The typical refusing patient at a glance")
+
+shape = normalised_profile(refusers, everyone, groups, GROUP_LABEL)
+
+if shape.empty:
+    st.info("No numeric or boolean features among the top ones to plot.")
+else:
+    chart_column, legend_column = st.columns([3, 2])
+
+    with chart_column:
+        st.pyplot(radar_figure(shape, {"all patients": "tab:gray", GROUP_LABEL: "crimson"}))
+
+    with legend_column:
+        st.caption(
+            "Red is the women who never come, grey is every patient in the data. "
+            "Counts are divided by the population's 90th percentile so the axes share a "
+            "scale; yes/no features are plotted as the share who are true. Where red "
+            "sits inside grey, the refusal group does less of that than the population."
+        )
+        st.dataframe(shape.round(3), width="stretch")
+
+    st.caption("Categories cannot go on a radar, so the most common values are:")
+    st.table(
+        pd.DataFrame(
+            [
+                (
+                    column,
+                    refusers[column].value_counts(dropna=False).index[0],
+                    f"{refusers[column].value_counts(normalize=True, dropna=False).iloc[0]:.0%}",
+                )
+                for column in groups["categorical"]
+            ],
+            columns=["feature", "most common", "share of the group"],
+        ).set_index("feature")
+    )

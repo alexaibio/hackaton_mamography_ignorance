@@ -3,9 +3,17 @@ import streamlit as st
 
 from mammography.io import read_table
 from mammography.model.train import load_run
-from mammography.profiles import feature_groups, most_important, person_level, profile
+from mammography.profiles import (
+    feature_groups,
+    most_important,
+    normalised_profile,
+    person_level,
+    profile,
+    radar_figure,
+)
 
 PROFILE_FEATURES = 8
+GROUP_LABEL = "responder group"
 
 # invitations arrive yearly but screening is recommended every two years, so a woman
 # following the guideline perfectly responds to about half of hers — 100% is the wrong bar
@@ -62,3 +70,40 @@ st.caption(
     "Median for counts, share for yes/no attributes, most common value for categories."
 )
 st.table(profile(reliable, groups))
+
+st.header("The typical reliable patient at a glance")
+
+shape = normalised_profile(reliable, everyone, groups, GROUP_LABEL)
+
+if shape.empty:
+    st.info("No numeric or boolean features among the top ones to plot.")
+else:
+    chart_column, legend_column = st.columns([3, 2])
+
+    with chart_column:
+        st.pyplot(radar_figure(shape, {"all patients": "tab:gray", GROUP_LABEL: "crimson"}))
+
+    with legend_column:
+        st.caption(
+            "Red is the women who reliably come, grey is every patient in the data. "
+            "Counts are divided by the population's 90th percentile so the axes share a "
+            "scale; yes/no features are plotted as the share who are true. Where red "
+            "sits outside grey, the responder group does more of that than the "
+            "population — that is the behaviour an intervention is trying to produce."
+        )
+        st.dataframe(shape.round(3), width="stretch")
+
+    st.caption("Categories cannot go on a radar, so the most common values are:")
+    st.table(
+        pd.DataFrame(
+            [
+                (
+                    column,
+                    reliable[column].value_counts(dropna=False).index[0],
+                    f"{reliable[column].value_counts(normalize=True, dropna=False).iloc[0]:.0%}",
+                )
+                for column in groups["categorical"]
+            ],
+            columns=["feature", "most common", "share of the group"],
+        ).set_index("feature")
+    )

@@ -1,7 +1,11 @@
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 from mammography.config import get_config
 from mammography.model.train import feature_columns, feature_importance
+
+POPULATION_LABEL = "all patients"
 
 
 def feature_groups(selected: list[str] | None = None) -> dict[str, list[str]]:
@@ -98,6 +102,64 @@ def category_gaps(
     table["the others"] = (table["the others"] * 100).round(1)
 
     return table.reindex(table["gap_pp"].abs().sort_values(ascending=False).index).head(top)
+
+
+def normalised_groups(
+    frames: dict[str, pd.DataFrame], population: pd.DataFrame, groups: dict[str, list[str]]
+) -> pd.DataFrame:
+    """Numeric and boolean features on a common 0-1 scale, one column per group.
+
+    Counts are divided by the population's 90th percentile, so a typical high value
+    reaches about 1 and the axes stay comparable. Shares are already 0-1.
+    """
+    rows = {}
+
+    for column in groups["numeric"]:
+        scale = population[column].quantile(0.9)
+        if not scale or pd.isna(scale):
+            continue
+        rows[column] = {
+            label: frame[column].median() / scale for label, frame in frames.items()
+        }
+
+    for column in groups["boolean"]:
+        rows[column] = {label: frame[column].mean() for label, frame in frames.items()}
+
+    return pd.DataFrame(rows).T.clip(lower=0.0, upper=1.2).fillna(0.0)
+
+
+def normalised_profile(
+    group: pd.DataFrame,
+    population: pd.DataFrame,
+    groups: dict[str, list[str]],
+    group_label: str,
+) -> pd.DataFrame:
+    return normalised_groups(
+        {group_label: group, POPULATION_LABEL: population}, population, groups
+    )
+
+
+def radar_figure(shape: pd.DataFrame, colours: dict[str, str]):
+    """The normalised profile as a radar. Series are drawn in the order given."""
+    labels = [
+        name.replace("_cnt", "").replace("_flag", "").replace("_", " ") for name in shape.index
+    ]
+    angles = np.linspace(0, 2 * np.pi, len(labels), endpoint=False).tolist()
+    closed = angles + angles[:1]
+
+    figure, axes = plt.subplots(figsize=(6, 6), subplot_kw={"polar": True})
+    for series, colour in colours.items():
+        values = shape[series].tolist()
+        axes.plot(closed, values + values[:1], color=colour, linewidth=2, label=series)
+        axes.fill(closed, values + values[:1], color=colour, alpha=0.15)
+
+    axes.set_xticks(angles)
+    axes.set_xticklabels(labels, fontsize=8)
+    axes.set_yticks([0.25, 0.5, 0.75, 1.0])
+    axes.set_yticklabels([])
+    axes.set_ylim(0, 1.2)
+    axes.legend(loc="upper right", bbox_to_anchor=(1.35, 1.12))
+    return figure
 
 
 def representative(people: pd.DataFrame, groups: dict[str, list[str]]) -> pd.Series:
