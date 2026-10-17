@@ -94,6 +94,9 @@ uv run jupyter lab
 It is done with a streamlit app.
 
 UX: `uv run streamlit run app/Home.py`
+
+Or in docker, with no local python needed: `docker compose -f docker/docker-compose-streamlit.yaml up --build`
+
 It opens on http://localhost:8501.
 
 

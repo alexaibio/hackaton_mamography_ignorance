@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 
+from mammography.clusters import cluster_descriptions, cluster_figure, shap_clusters
 from mammography.io import read_table
 from mammography.model.train import load_run
 from mammography.profiles import (
@@ -100,3 +101,44 @@ else:
             columns=["feature", "most common", "share of the group"],
         ).set_index("feature")
     )
+
+st.header("Groups within the refusal cohort")
+st.caption(
+    "Not every woman who stays away does so for the same reason. These groups come from "
+    "clustering the patients by their SHAP contributions — by *why* the model puts them "
+    "at risk — rather than by raw similarity. Two women with the same risk land in "
+    "different groups if one lacks a gynaecologist and the other has no contact with any "
+    "doctor at all, which is what makes the groups actionable."
+)
+
+controls_left, controls_right = st.columns(2)
+cluster_count = controls_left.slider("Number of groups", 2, 8, 4)
+sample_size = controls_right.select_slider(
+    "Patients sampled", options=[2_000, 5_000, 10_000, 20_000], value=5_000,
+    help="SHAP is computed per patient, so a sample keeps the page responsive",
+)
+
+if st.button("Find the groups"):
+    with st.spinner("Computing SHAP values and clustering..."):
+        st.session_state["clusters"] = shap_clusters(
+            run, refusers, clusters=cluster_count, sample=sample_size
+        )
+
+found = st.session_state.get("clusters")
+if found is None:
+    st.info("Press **Find the groups**.")
+else:
+    points, contributions = found
+    chart, summary = st.columns([2, 3])
+
+    with chart:
+        st.pyplot(cluster_figure(points))
+        st.caption(
+            "Each dot is one patient, placed by the two strongest directions of variation "
+            "in SHAP space. The axes have no units — only the grouping means anything."
+        )
+
+    with summary:
+        for description in cluster_descriptions(points, contributions, refusers):
+            with st.container(border=True):
+                st.markdown(description)
