@@ -1,4 +1,6 @@
 # Mammography ignorance analysis toolset
+
+## Intro
 This package provides a set of tools to analyse VZP insurance company data about patients
 who were invited for a mammography screening but did not show up.
 
@@ -12,9 +14,17 @@ The tools are presented as a simple web interface (streamlit) with the following
 - `Refusal/responder comparison` page - one radar chart putting the two groups directly against each other. Every patient is in exactly one of them: never screened after any invitation, or screened after at least one
 
 
+## Technical implementation details
+- All functionality is available as a web application (streamlit) - `app/`
+- The data is provided by the VZP insurance company and should be placed in the `data/raw_csv` folder
+- AI: the risk model is a decision tree trained on 15 features; two features are excluded because they are redundant: `invitation_sequence`, `months_since_last_screen`
+  - the model has three targets, `screening 12m`, `6m` and `3m`, in order to provide a time perspective
+  - feature importance is calculated in order to understand which features are the most important and to propose an intervention
+- LLM features: based on the most important features, three personalised reminder emails are composed, as well as an email to the gynaecologist and the general practitioner, in order to facilitate attendance. An OpenAI API token must be entered
+- In order to compare refusal and non-refusal patient profiles, a radar plot is composed
 
 
-## Installing package with UV
+## Installing with UV
 
 ### Prerequisites
 
@@ -35,37 +45,40 @@ cp .env_example .env
 ```
 
 
-### Environment variables
-
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `LOG_LEVEL` | no | Defaults to `INFO` |
-| `LOG_DIR` | yes | Where `logger.py` writes rotating log files |
-| `DATA_FOLDER` | yes | Root of `raw/`, `interim/`, `processed/` |
-| `MODELS_FOLDER` | yes | Where trained CatBoost models are saved |
-| `FHIR_BASE_URL` | for `fetch` | Base URL of the FHIR server |
-| `FHIR_TOKEN` | for `fetch` | Bearer token |
-
 
 ### Running commands
 
-You can run Python with two options:
+You can run Python in two ways:
 
 - through `uv run` — calling `python` directly bypasses the virtual
 environment:
 
 ```bash
-uv run mammo fetch
+uv run mammo csv_import
 uv run jupyter lab
 ```
-- or through activation environment with `source .venv/bin/activate `
+- or by activating the environment with `source .venv/bin/activate`
 
+
+## The UX for the end customer
+It is done with a streamlit app.
+
+UX: `uv run streamlit run app/Home.py`
+It opens on http://localhost:8501.
+
+
+
+
+# Leftover functionality
+Some functionality is not used in this application.
+Initially the data was supposed to come via a FHIR API, so a docker with a test FHIR server was created.
+The data now comes from a csv file, so it is not used.
 
 ## Test data
-### FHIR local docker 
-First, provide access to FHIR API, 
+### FHIR local docker
+First, provide access to a FHIR API,
 - either by running a test instance in docker `docker compose -f docker/docker-compose-fhir.yaml up -d`
-- or by providing .env credentials `FHIR_BASE_UR`
+- or by providing .env credentials `FHIR_BASE_URL`
 
 You can test it either by
 - `curl -s http://localhost:8080/fhir/metadata | jq '.software.version'`
@@ -110,13 +123,11 @@ invitation layer has to be generated separately.
 
 
 
-## The flow
+### The flow
 
-
-
-Then each command can be ran as
-- `uv run mammo fetch` or
-- or after `source .venv/bin/activate` you can do `mammo fetch`
+Each command can be run as
+- `uv run mammo fetch`, or
+- after `source .venv/bin/activate` you can do `mammo fetch`
 
 Each stage is a CLI subcommand
 
@@ -135,8 +146,4 @@ mammo segment          →  data/processed/segments.csv + reports/segments.md
 ```
 
 
-## The UX for end customer
-It is done with streamlit app.
 
-UX : `uv run streamlit run app/Home.py`
-It opens on http://localhost:8501.
